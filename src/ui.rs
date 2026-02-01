@@ -3,6 +3,7 @@ use std::fmt;
 
 pub enum Sql {
     // setup
+    DropTables,
     CreateYears,
     CreateModels,
     CreateBrands,
@@ -52,6 +53,9 @@ pub enum Label<'a> {
     LoadOk {
         entity: &'a str,
     },
+    UniqueConstraint {
+        fipe: &'a str,
+    },
     InsertReference {
         codigo: &'a str,
         mes: &'a str,
@@ -88,7 +92,7 @@ impl<'a> fmt::Display for Label<'a> {
                 last_update,
             } => write!(
                 f,
-                "{}\n{} {}\n{} {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}\n",
+                "{}\n{} {}\n{} {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}",
                 "FIPE_rs".bold().bright_cyan(),
                 "DB Status:".bold().yellow(),
                 db_status.bold(),
@@ -104,6 +108,8 @@ impl<'a> fmt::Display for Label<'a> {
                 "Load Models",
                 "5".bold().bright_green(),
                 "Load Years",
+                "9".bold().bright_green(),
+                "Load All",
                 "0".bold().bright_green(),
                 "Exit"
             ),
@@ -137,6 +143,15 @@ impl<'a> fmt::Display for Label<'a> {
                 "[SUCCESS]".bold().bright_green(),
                 format!(" {} successfully loaded.", entity.blue()).bold()
             ),
+            Label::UniqueConstraint { fipe } => {
+                write!(
+                    f,
+                    "{}: {} {}",
+                    "[WARN]".bold().yellow(),
+                    fipe.italic().black().dimmed(),
+                    "Already exists.".italic().black().dimmed()
+                )
+            }
             Label::InsertReference { codigo, mes } => write!(
                 f,
                 "{}: {} - {}",
@@ -151,7 +166,7 @@ impl<'a> fmt::Display for Label<'a> {
                 codigo,
             } => write!(
                 f,
-                "{}: | {} | {} {} - {}",
+                "{} | {} | {}: {} - {}",
                 tipo.bold().blue(),
                 referencia.bold().yellow(),
                 "[SUCCESS]".bold().bright_green(),
@@ -166,7 +181,7 @@ impl<'a> fmt::Display for Label<'a> {
                 codigo,
             } => write!(
                 f,
-                "{}: | {} | {} | {} {} - {}",
+                "{} | {} | {} | {}: {} - {}",
                 tipo.bold().blue(),
                 referencia.bold().yellow(),
                 marca.bold().red(),
@@ -183,7 +198,7 @@ impl<'a> fmt::Display for Label<'a> {
                 codigo,
             } => write!(
                 f,
-                "{}: | {} | {} | {} | {} {} - {}",
+                "{} | {} | {} | {} | {}: {} - {}",
                 tipo.bold().blue(),
                 referencia.bold().yellow(),
                 marca.bold().red(),
@@ -210,15 +225,28 @@ impl Sql {
     pub fn as_str(&self) -> &'static str {
         match self {
             // setup
+            Sql::DropTables => {
+                r#"
+                DROP TABLE IF EXISTS errors;
+                DROP TABLE IF EXISTS config;
+                DROP TABLE IF EXISTS years;
+                DROP TABLE IF EXISTS models;
+                DROP TABLE IF EXISTS brands;
+                DROP TABLE IF EXISTS "references";
+                DROP TABLE IF EXISTS types;
+            "#
+            }
+
             Sql::CreateYears => {
                 r#"
                 DROP TABLE IF EXISTS years;
                 CREATE TABLE years(
                     id integer PRIMARY KEY,
                     description text,
-                    fipe text unique,
+                    fipe text,
                     model_id integer,
-                    foreign key(model_id) references models(id)
+                    foreign key(model_id) references models(id),
+                    unique(fipe, model_id)
                 )
             "#
             }
@@ -229,9 +257,10 @@ impl Sql {
                 CREATE TABLE models(
                     id integer PRIMARY KEY,
                     description text,
-                    fipe text unique,
+                    fipe text,
                     brand_id integer,
-                    foreign key(brand_id) references brands(id)
+                    foreign key(brand_id) references brands(id),
+                    unique(fipe, brand_id)
                 )
             "#
             }
@@ -242,11 +271,12 @@ impl Sql {
                 CREATE TABLE brands(
                     id integer PRIMARY KEY,
                     description text,
-                    fipe text unique,
+                    fipe text,
                     type_id integer,
                     ref_id integer,
                     foreign key(type_id) references types(id),
-                    foreign key(ref_id) references "references"(id)
+                    foreign key(ref_id) references "references"(id),
+                    unique(fipe, ref_id)
                 )
             "#
             }
@@ -280,9 +310,11 @@ impl Sql {
                 DROP TABLE IF EXISTS errors;
                 CREATE TABLE errors(
                     id int,
+                    date date,
                     entity text,
                     url text,
-                    body text
+                    body text,
+                    err text
                 );
             "#
             }
@@ -365,7 +397,9 @@ impl Sql {
                 "INSERT INTO years (description, fipe, model_id) VALUES (?1, ?2, ?3)"
             }
 
-            Sql::InsertError => "INSERT INTO errors (entity, url, body) VALUES (?1, ?2, ?3)",
+            Sql::InsertError => {
+                "INSERT INTO errors (entity, url, body, err, date) VALUES (?1, ?2, ?3, ?4, datetime('now', 'localtime'))"
+            }
 
             Sql::UpdateConfig => {
                 "UPDATE config SET db_status = ?1, last_update = datetime('now', 'localtime')"

@@ -5,15 +5,14 @@ use rusqlite::{ params, Connection, Result };
 use std::io::{ self };
 pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::error::Error>> {
     if recreate {
-        // Years
-        (Label::CreateTable { table_name: "years" }).log();
-        conn.execute_batch(Sql::CreateYears.as_str())?;
-        // Models
-        (Label::CreateTable { table_name: "models" }).log();
-        conn.execute_batch(Sql::CreateModels.as_str())?;
-        // Brands
-        (Label::CreateTable { table_name: "brands" }).log();
-        conn.execute_batch(Sql::CreateBrands.as_str())?;
+        // Drops
+        conn.execute_batch(Sql::DropTables.as_str())?;
+        // Errors
+        (Label::CreateTable { table_name: "errors" }).log();
+        conn.execute_batch(Sql::CreateErrors.as_str())?;
+        // Config
+        (Label::CreateTable { table_name: "config" }).log();
+        conn.execute_batch(Sql::CreateConfig.as_str())?;
         // References
         (Label::CreateTable { table_name: "references" }).log();
         conn.execute_batch(Sql::CreateReferences.as_str())?;
@@ -21,13 +20,15 @@ pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::er
         (Label::CreateTable { table_name: "types" }).log();
         conn.execute_batch(Sql::CreateTypes.as_str())?;
         conn.execute(Sql::InitTypes.as_str(), ["Carros", "Motos", "Caminhões e Micro-Ônibus"])?;
-        // Errors
-        (Label::CreateTable { table_name: "errors" }).log();
-        conn.execute_batch(Sql::CreateErrors.as_str())?;
-        // Config
-        (Label::CreateTable { table_name: "config" }).log();
-        conn.execute_batch(Sql::CreateConfig.as_str())?;
-
+        // Brands
+        conn.execute_batch(Sql::CreateBrands.as_str())?;
+        (Label::CreateTable { table_name: "brands" }).log();
+        // Models
+        (Label::CreateTable { table_name: "models" }).log();
+        conn.execute_batch(Sql::CreateModels.as_str())?;
+        // Years
+        (Label::CreateTable { table_name: "years" }).log();
+        conn.execute_batch(Sql::CreateYears.as_str())?;
         Ok(())
     } else {
         Ok(())
@@ -41,9 +42,10 @@ pub async fn insert_error(
     conn: &Connection,
     entity: &str,
     url: &str,
-    body: &str
+    body: &str,
+    err: &str
 ) -> Result<(), Box<dyn std::error::Error>> {
-    conn.execute(&Sql::InsertError.as_str(), params![entity, url, body])?;
+    conn.execute(&Sql::InsertError.as_str(), params![entity, url, body, err])?;
     Ok(())
 }
 

@@ -66,15 +66,15 @@ pub fn select_models(conn: &Connection) -> Result<Vec<Models>, Box<dyn std::erro
     let mut stmt = conn.prepare(Sql::SelectModels.as_str())?;
     let model_iter = stmt.query_map([], |row| {
         Ok(Models {
-            id: row.get(0)?,
-            description: row.get(1)?,
-            fipe: row.get(1)?,
-            ref_id: row.get(1)?,
-            ref_description: row.get(1)?,
-            type_id: row.get(1)?,
-            type_description: row.get(1)?,
-            brand_id: row.get(1)?,
-            brand_description: row.get(1)?,
+            id: row.get("id")?,
+            description: row.get("description")?,
+            fipe: row.get("fipe")?,
+            ref_id: row.get("ref_id")?,
+            ref_description: row.get("ref_description")?,
+            type_id: row.get("type_id")?,
+            type_description: row.get("type_description")?,
+            brand_id: row.get("brand_id")?,
+            brand_description: row.get("brand_description")?,
         })
     })?;
 

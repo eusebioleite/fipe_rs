@@ -77,11 +77,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 load_years(&conn).await?;
                 press_key_continue();
             }
+            9 => {
+                load_references(&conn).await?;
+                load_brands(&conn).await?;
+                load_models(&conn).await?;
+                load_years(&conn).await?;
+                press_key_continue();
+            }
             0 => {
                 exit(0);
             }
             _ => {
                 Label::InvalidInput.log();
+                press_key_continue();
             }
         }
     }

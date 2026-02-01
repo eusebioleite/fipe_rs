@@ -6,9 +6,10 @@ use reqwest::Client;
 use rusqlite::{ params, Connection, Result };
 use std::process::exit;
 pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarTabelaDeReferencia";
     let response = match
         Client::new()
-            .post("https://veiculos.fipe.org.br/api/veiculos/ConsultarTabelaDeReferencia")
+            .post(url)
             .header("Referer", "http://veiculos.fipe.org.br/")
             .header("Content-Type", "application/json")
             .send().await
@@ -17,25 +18,46 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
         Err(e) => {
             let err_msg = e.to_string();
             (Label::ResponseError { message: &err_msg }).log();
-            insert_error(
-                conn,
-                "References",
-                "https://veiculos.fipe.org.br/api/veiculos/ConsultarTabelaDeReferencia",
-                ""
-            ).await?;
+            insert_error(&conn, "References", &url, "", &err_msg).await?;
             exit(1);
         }
     };
 
-    let references: Vec<ReferencesResponse> = response.json().await?;
+    let references: Vec<ReferencesResponse> = match response.json().await {
+        Ok(data) => data,
+        Err(e) => {
+            let err_msg = format!("JSON Parse Error: {}", e);
+            (Label::ResponseError { message: &err_msg }).log();
+            insert_error(&conn, "References", &url, "", &err_msg).await?;
+            return Ok(());
+        }
+    };
 
     for r in &references {
-        let cod_str = r.codigo.to_string();
-        (Label::InsertReference { codigo: &cod_str, mes: &r.mes }).log();
-        conn.execute(
-            Sql::InsertReference.as_str(),
-            params![r.mes.split('/').nth(0), r.mes.split('/').nth(1), r.codigo]
-        )?;
+        let codigo = r.codigo.to_string();
+        match
+            conn.execute(
+                Sql::InsertReference.as_str(),
+                params![r.mes.split('/').nth(0), r.mes.split('/').nth(1), r.codigo]
+            )
+        {
+            Ok(_) => {
+                (Label::InsertReference { codigo: &codigo, mes: &r.mes }).log();
+                ();
+            }
+
+            Err(rusqlite::Error::SqliteFailure(e, _)) if
+                e.code == rusqlite::ErrorCode::ConstraintViolation
+            => {
+                (Label::UniqueConstraint { fipe: &codigo }).log();
+            }
+
+            Err(e) => {
+                let err_msg = e.to_string();
+                (Label::ResponseError { message: &err_msg }).log();
+                exit(1);
+            }
+        }
     }
     (Label::LoadOk { entity: "References" }).log();
     Ok(())
@@ -49,13 +71,13 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
         for r in &references {
             let body =
                 serde_json::json!({
-                "codigoTipoVeiculo": t.id,
-                "codigoTabelaReferencia": r.fipe
+                "codigoTipoVeiculo": &t.id,
+                "codigoTabelaReferencia": &r.fipe
             });
-
+            let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarMarcas";
             let response = match
                 Client::new()
-                    .post("https://veiculos.fipe.org.br/api/veiculos/ConsultarMarcas")
+                    .post(url)
                     .header("Referer", "http://veiculos.fipe.org.br/")
                     .header("Content-Type", "application/json")
                     .body(body.to_string())
@@ -65,28 +87,48 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                 Err(e) => {
                     let err_msg = e.to_string();
                     (Label::ResponseError { message: &err_msg }).log();
-                    insert_error(
-                        conn,
-                        "Brands",
-                        "https://veiculos.fipe.org.br/api/veiculos/ConsultarMarcas",
-                        &body.to_string()
-                    ).await?;
-                    exit(1);
+                    insert_error(&conn, "Brands", &url, &body.to_string(), &err_msg).await?;
+                    continue;
                 }
             };
 
-            let brands: Vec<FipeStruct> = response.json().await?;
+            let brands: Vec<FipeStruct> = match response.json().await {
+                Ok(data) => data,
+                Err(e) => {
+                    let err_msg = format!("JSON Parse Error: {}", e);
+                    (Label::ResponseError { message: &err_msg }).log();
+                    insert_error(&conn, "Brands", &url, &body.to_string(), &err_msg).await?;
+                    continue;
+                }
+            };
             for b in brands {
-                (Label::InsertBrand {
-                    tipo: &t.description,
-                    referencia: format!("{}/{}", &r.month, &r.year).as_str(),
-                    marca: &b.label,
-                    codigo: &b.value,
-                }).log();
-                conn.execute(Sql::InsertBrand.as_str(), params![b.label, b.value, t.id, r.id])?;
-            }
+                match
+                    conn.execute(Sql::InsertBrand.as_str(), params![b.label, b.value, t.id, r.id])
+                {
+                    Ok(_) => {
+                        (Label::InsertBrand {
+                            tipo: &t.description,
+                            referencia: format!("{}/{}", &r.month, &r.year).as_str(),
+                            marca: &b.label,
+                            codigo: &b.value,
+                        }).log();
+                        ();
+                    }
 
-            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                    Err(rusqlite::Error::SqliteFailure(e, _)) if
+                        e.code == rusqlite::ErrorCode::ConstraintViolation
+                    => {
+                        (Label::UniqueConstraint { fipe: &b.value }).log();
+                    }
+
+                    Err(e) => {
+                        let err_msg = e.to_string();
+                        (Label::ResponseError { message: &err_msg }).log();
+                        exit(1);
+                    }
+                };
+            }
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         }
     }
     (Label::LoadOk { entity: "Brands" }).log();
@@ -102,9 +144,10 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
             "codigoTabelaReferencia": b.ref_id,
             "codigoMarca": b.fipe
         });
+        let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarModelos";
         let response = match
             Client::new()
-                .post("https://veiculos.fipe.org.br/api/veiculos/ConsultarModelos")
+                .post(url)
                 .header("Referer", "http://veiculos.fipe.org.br/")
                 .header("Content-Type", "application/json")
                 .body(body.to_string())
@@ -114,29 +157,46 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
             Err(e) => {
                 let err_msg = e.to_string();
                 (Label::ResponseError { message: &err_msg }).log();
-                insert_error(
-                    conn,
-                    "Models",
-                    "https://veiculos.fipe.org.br/api/veiculos/ConsultarModelos",
-                    &body.to_string()
-                ).await?;
+                insert_error(&conn, "Models", &url, &body.to_string(), &err_msg).await?;
                 exit(1);
             }
         };
-        let models: ModelsResponse = response.json().await?;
+        let models: ModelsResponse = match response.json().await {
+            Ok(data) => data,
+            Err(e) => {
+                let err_msg = format!("JSON Parse Error: {}", e);
+                (Label::ResponseError { message: &err_msg }).log();
+                insert_error(&conn, "Models", &url, &body.to_string(), &err_msg).await?;
+                return Ok(());
+            }
+        };
         for m in models.model {
-            (Label::InsertModel {
-                tipo: &b.type_description,
-                referencia: &b.ref_description,
-                marca: &b.description,
-                modelo: &m.label,
-                codigo: &m.value.to_string(),
-            }).log();
+            match conn.execute(Sql::InsertModel.as_str(), params![m.label, m.value, b.id]) {
+                Ok(_) => {
+                    (Label::InsertModel {
+                        tipo: &b.type_description,
+                        referencia: &b.ref_description,
+                        marca: &b.description,
+                        modelo: &m.label,
+                        codigo: &m.value.to_string(),
+                    }).log();
+                    ();
+                }
 
-            conn.execute(Sql::InsertModel.as_str(), params![m.label, m.value, b.id])?;
+                Err(rusqlite::Error::SqliteFailure(e, _)) if
+                    e.code == rusqlite::ErrorCode::ConstraintViolation
+                => {
+                    (Label::UniqueConstraint { fipe: &m.value.to_string() }).log();
+                }
+
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    (Label::ResponseError { message: &err_msg }).log();
+                    exit(1);
+                }
+            }
         }
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     }
     (Label::LoadOk { entity: "Models" }).log();
     Ok(())
@@ -152,10 +212,10 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
             "codigoMarca": &m.brand_id,
             "codigoModelo": &m.fipe
         });
-
+        let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarAnoModelo";
         let response = match
             Client::new()
-                .post("https://veiculos.fipe.org.br/api/veiculos/ConsultarAnoModelo")
+                .post(url)
                 .header("Referer", "http://veiculos.fipe.org.br/")
                 .header("Content-Type", "application/json")
                 .body(body.to_string())
@@ -165,30 +225,48 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
             Err(e) => {
                 let err_msg = e.to_string();
                 (Label::ResponseError { message: &err_msg }).log();
-                insert_error(
-                    conn,
-                    "Years",
-                    "https://veiculos.fipe.org.br/api/veiculos/ConsultarAnosModelo",
-                    &body.to_string()
-                ).await?;
+                insert_error(&conn, "Years", &url, &body.to_string(), &err_msg).await?;
                 exit(1);
             }
         };
 
-        let years: Vec<FipeStruct> = response.json().await?;
+        let years: Vec<FipeStruct> = match response.json().await {
+            Ok(data) => data,
+            Err(e) => {
+                let err_msg = format!("JSON Parse Error: {}", e);
+                (Label::ResponseError { message: &err_msg }).log();
+                insert_error(&conn, "Years", &url, &body.to_string(), &err_msg).await?;
+                return Ok(());
+            }
+        };
         for y in years {
-            (Label::InsertYear {
-                tipo: &m.type_description,
-                referencia: &m.ref_description,
-                marca: &m.brand_description,
-                modelo: &m.description,
-                ano: &y.label,
-                codigo: &y.value,
-            }).log();
-            conn.execute(Sql::InsertYear.as_str(), params![y.label, y.value, m.id])?;
-        }
+            match conn.execute(Sql::InsertYear.as_str(), params![y.label, y.value, m.id]) {
+                Ok(_) => {
+                    (Label::InsertYear {
+                        tipo: &m.type_description,
+                        referencia: &m.ref_description,
+                        marca: &m.brand_description,
+                        modelo: &m.description,
+                        ano: &y.label,
+                        codigo: &y.value,
+                    }).log();
+                    ();
+                }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                Err(rusqlite::Error::SqliteFailure(e, _)) if
+                    e.code == rusqlite::ErrorCode::ConstraintViolation
+                => {
+                    (Label::UniqueConstraint { fipe: &y.value }).log();
+                }
+
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    (Label::ResponseError { message: &err_msg }).log();
+                    exit(1);
+                }
+            };
+        }
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     }
     (Label::LoadOk { entity: "Years" }).log();
     Ok(())
