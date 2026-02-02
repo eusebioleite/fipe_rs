@@ -10,7 +10,7 @@ pub enum Sql {
     CreateReferences,
     CreateTypes,
     InitTypes,
-    CreateErrors,
+    CreateIndexes,
     CreateConfig,
 
     // selects
@@ -25,7 +25,6 @@ pub enum Sql {
     InsertBrand,
     InsertModel,
     InsertYear,
-    InsertError,
     UpdateConfig,
 }
 
@@ -45,10 +44,16 @@ pub enum Label<'a> {
     CreateTable {
         table_name: &'a str,
     },
-
+    CreateIndexes,
     // requests
     ResponseError {
         message: &'a str,
+    },
+    ApiConnectionError {
+        message: &'a str,
+    },
+    ApiBlock {
+        code: &'a str,
     },
     LoadOk {
         entity: &'a str,
@@ -125,17 +130,35 @@ impl<'a> fmt::Display for Label<'a> {
                 "[SUCCESS]".bold().bright_green(),
                 "Succesfully recreated the database.".bold()
             ),
-            Label::DbCreationErr { message } | Label::ResponseError { message } => write!(
+            Label::DbCreationErr { message }
+            | Label::ResponseError { message }
+            | Label::ApiConnectionError { message } => write!(
                 f,
                 "{}: {}",
                 "[ERROR]".bold().bright_red(),
                 message.italic().black().dimmed()
+            ),
+            Label::ApiBlock { code } => write!(
+                f,
+                "{}: {} {}",
+                "[ERROR]".bold().bright_red(),
+                code.italic().black().dimmed(),
+                "Too many requests - API blocking, waiting 60 seconds..."
+                    .italic()
+                    .black()
+                    .dimmed()
             ),
             Label::CreateTable { table_name } => write!(
                 f,
                 "{}: {}",
                 "[SUCCESS]".bold().bright_green(),
                 format!("Table {} created.", table_name.blue()).bold()
+            ),
+            Label::CreateIndexes => write!(
+                f,
+                "{}: {}",
+                "[SUCCESS]".bold().bright_green(),
+                "Created indexes.".bold()
             ),
             Label::LoadOk { entity } => write!(
                 f,
@@ -227,7 +250,6 @@ impl Sql {
             // setup
             Sql::DropTables => {
                 r#"
-                DROP TABLE IF EXISTS errors;
                 DROP TABLE IF EXISTS config;
                 DROP TABLE IF EXISTS years;
                 DROP TABLE IF EXISTS models;
@@ -304,18 +326,16 @@ impl Sql {
             }
 
             Sql::InitTypes => "INSERT INTO types(description) VALUES (?1), (?2), (?3)",
-
-            Sql::CreateErrors => {
+            Sql::CreateIndexes => {
                 r#"
-                DROP TABLE IF EXISTS errors;
-                CREATE TABLE errors(
-                    id int,
-                    date date,
-                    entity text,
-                    url text,
-                    body text,
-                    err text
-                );
+                CREATE INDEX idx_references_id ON "references" (id);
+                CREATE INDEX idx_types_id ON types (id);
+                CREATE INDEX idx_brands_ref_id ON brands (ref_id);
+                CREATE INDEX idx_brands_type_id ON brands (type_id);
+                CREATE INDEX idx_brands_id ON brands (id);
+                CREATE INDEX idx_models_brand_id ON models (brand_id);
+                CREATE INDEX idx_models_id ON models (id);
+                CREATE INDEX idx_years_model_id ON years (model_id);
             "#
             }
 
@@ -341,7 +361,21 @@ impl Sql {
             // selects
             Sql::SelectTypes => "SELECT id, description FROM types",
 
-            Sql::SelectReferences => "SELECT id, month, year, fipe FROM \"references\"",
+            Sql::SelectReferences => {
+                r#"
+                SELECT
+                    id,
+                    month,
+                    year,
+                    fipe
+                FROM "references" r
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM brands b
+                    WHERE b.ref_id = r.id
+                )
+                "#
+            }
 
             Sql::SelectBrands => {
                 r#"
@@ -355,7 +389,12 @@ impl Sql {
                     t.description type_description
                 FROM brands b
                 LEFT JOIN "references" r ON b.ref_id = r.id
-                LEFT JOIN types t ON b.type_id = t.id;
+                LEFT JOIN types t ON b.type_id = t.id
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM models m
+                    WHERE m.brand_id = b.id
+                )
             "#
             }
 
@@ -375,6 +414,11 @@ impl Sql {
                 LEFT JOIN brands b ON m.brand_id = b.id
                 LEFT JOIN "references" r ON b.ref_id = r.id
                 LEFT JOIN types t ON b.type_id = t.id
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM years y
+                    WHERE m.id = y.model_id
+                )
             "#
             }
 
@@ -395,10 +439,6 @@ impl Sql {
 
             Sql::InsertYear => {
                 "INSERT INTO years (description, fipe, model_id) VALUES (?1, ?2, ?3)"
-            }
-
-            Sql::InsertError => {
-                "INSERT INTO errors (entity, url, body, err, date) VALUES (?1, ?2, ?3, ?4, datetime('now', 'localtime'))"
             }
 
             Sql::UpdateConfig => {

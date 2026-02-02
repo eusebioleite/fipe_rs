@@ -1,15 +1,13 @@
 use crate::ui::{ Label, Sql };
 use crate::schema::Config;
 
+use rand::{ Rng };
 use rusqlite::{ params, Connection, Result };
 use std::io::{ self };
 pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::error::Error>> {
     if recreate {
         // Drops
         conn.execute_batch(Sql::DropTables.as_str())?;
-        // Errors
-        (Label::CreateTable { table_name: "errors" }).log();
-        conn.execute_batch(Sql::CreateErrors.as_str())?;
         // Config
         (Label::CreateTable { table_name: "config" }).log();
         conn.execute_batch(Sql::CreateConfig.as_str())?;
@@ -29,24 +27,14 @@ pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::er
         // Years
         (Label::CreateTable { table_name: "years" }).log();
         conn.execute_batch(Sql::CreateYears.as_str())?;
+        // Indexes
+        Label::CreateIndexes.log();
+        conn.execute_batch(Sql::CreateIndexes.as_str())?;
+
         Ok(())
     } else {
         Ok(())
     }
-}
-
-// Types
-
-// Years
-pub async fn insert_error(
-    conn: &Connection,
-    entity: &str,
-    url: &str,
-    body: &str,
-    err: &str
-) -> Result<(), Box<dyn std::error::Error>> {
-    conn.execute(&Sql::InsertError.as_str(), params![entity, url, body, err])?;
-    Ok(())
 }
 
 pub async fn select_status(conn: &Connection) -> Result<Config, Box<dyn std::error::Error>> {
@@ -90,4 +78,8 @@ pub fn press_key_continue() {
     Label::PressKeyContinue.log();
     let mut input = String::new();
     let _ = io::stdin().read_line(&mut input);
+}
+
+pub async fn throttle() {
+    tokio::time::sleep(tokio::time::Duration::from_secs(rand::rng().random_range(1..3))).await;
 }

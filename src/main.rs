@@ -34,6 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => "Unknown".to_string().bright_red().to_string(),
         };
         let last_update = config.last_update.unwrap_or_else(|| "Never".to_string());
+
         (Label::MenuOptions { db_status: &db_status, last_update: &last_update }).log();
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;

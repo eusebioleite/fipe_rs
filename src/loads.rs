@@ -1,37 +1,54 @@
 use crate::schema::{ ReferencesResponse, ModelsResponse, FipeStruct };
 use crate::selects::{ select_types, select_references, select_brands, select_models };
-use crate::utils::insert_error;
 use crate::ui::{ Label, Sql };
+use crate::utils::{ throttle };
 use reqwest::Client;
 use rusqlite::{ params, Connection, Result };
 use std::process::exit;
+
+async fn fetch_fipe(
+    client: &reqwest::Client,
+    url: &str,
+    body: &serde_json::Value
+) -> Option<reqwest::Response> {
+    loop {
+        match
+            client
+                .post(url)
+                .header("Referer", "http://veiculos.fipe.org.br/")
+                .header("Content-Type", "application/json")
+                .header(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+                .json(body)
+                .send().await
+        {
+            Ok(res) if res.status().is_success() => {
+                return Some(res);
+            }
+            Ok(res) => {
+                (Label::ApiBlock { code: res.status().as_str() }).log();
+                tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            }
+            Err(e) => {
+                let err_msg = e.to_string();
+                (Label::ApiConnectionError { message: &err_msg }).log();
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
+}
+
 pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarTabelaDeReferencia";
-    let response = match
-        Client::new()
-            .post(url)
-            .header("Referer", "http://veiculos.fipe.org.br/")
-            .header("Content-Type", "application/json")
-            .send().await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            let err_msg = e.to_string();
-            (Label::ResponseError { message: &err_msg }).log();
-            insert_error(&conn, "References", &url, "", &err_msg).await?;
-            exit(1);
-        }
-    };
+    let response = Client::new()
+        .post(url)
+        .header("Referer", "http://veiculos.fipe.org.br/")
+        .header("Content-Type", "application/json")
+        .send().await?;
 
-    let references: Vec<ReferencesResponse> = match response.json().await {
-        Ok(data) => data,
-        Err(e) => {
-            let err_msg = format!("JSON Parse Error: {}", e);
-            (Label::ResponseError { message: &err_msg }).log();
-            insert_error(&conn, "References", &url, "", &err_msg).await?;
-            return Ok(());
-        }
-    };
+    let references: Vec<ReferencesResponse> = response.json().await?;
 
     for r in &references {
         let codigo = r.codigo.to_string();
@@ -66,6 +83,15 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
 pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let types = select_types(conn)?;
     let references = select_references(conn)?;
+    if references.len() == 0 {
+        (Label::LoadOk { entity: "Brands" }).log();
+        return Ok(());
+    }
+    let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarMarcas";
+    let client = reqwest::Client
+        ::builder()
+        .tcp_keepalive(std::time::Duration::from_secs(60))
+        .build()?;
 
     for t in &types {
         for r in &references {
@@ -74,30 +100,14 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                 "codigoTipoVeiculo": &t.id,
                 "codigoTabelaReferencia": &r.fipe
             });
-            let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarMarcas";
-            let response = match
-                Client::new()
-                    .post(url)
-                    .header("Referer", "http://veiculos.fipe.org.br/")
-                    .header("Content-Type", "application/json")
-                    .body(body.to_string())
-                    .send().await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    let err_msg = e.to_string();
-                    (Label::ResponseError { message: &err_msg }).log();
-                    insert_error(&conn, "Brands", &url, &body.to_string(), &err_msg).await?;
-                    continue;
-                }
-            };
+
+            // Chama nossa função robusta
+            let response = fetch_fipe(&client, url, &body).await.unwrap();
 
             let brands: Vec<FipeStruct> = match response.json().await {
                 Ok(data) => data,
-                Err(e) => {
-                    let err_msg = format!("JSON Parse Error: {}", e);
-                    (Label::ResponseError { message: &err_msg }).log();
-                    insert_error(&conn, "Brands", &url, &body.to_string(), &err_msg).await?;
+                Err(_) => {
+                    println!("Erro de decode inesperado. Provavelmente HTML de erro. Pulando...");
                     continue;
                 }
             };
@@ -128,7 +138,7 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                     }
                 };
             }
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            throttle().await;
         }
     }
     (Label::LoadOk { entity: "Brands" }).log();
@@ -137,6 +147,15 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
 
 pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let brands = select_brands(conn)?;
+    if brands.len() == 0 {
+        (Label::LoadOk { entity: "Models" }).log();
+        return Ok(());
+    }
+    let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarModelos";
+    let client = reqwest::Client
+        ::builder()
+        .tcp_keepalive(std::time::Duration::from_secs(60))
+        .build()?;
     for b in &brands {
         let body =
             serde_json::json!({
@@ -144,30 +163,13 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
             "codigoTabelaReferencia": b.ref_id,
             "codigoMarca": b.fipe
         });
-        let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarModelos";
-        let response = match
-            Client::new()
-                .post(url)
-                .header("Referer", "http://veiculos.fipe.org.br/")
-                .header("Content-Type", "application/json")
-                .body(body.to_string())
-                .send().await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                let err_msg = e.to_string();
-                (Label::ResponseError { message: &err_msg }).log();
-                insert_error(&conn, "Models", &url, &body.to_string(), &err_msg).await?;
-                exit(1);
-            }
-        };
+        let response = fetch_fipe(&client, &url, &body).await.unwrap();
+
         let models: ModelsResponse = match response.json().await {
             Ok(data) => data,
-            Err(e) => {
-                let err_msg = format!("JSON Parse Error: {}", e);
-                (Label::ResponseError { message: &err_msg }).log();
-                insert_error(&conn, "Models", &url, &body.to_string(), &err_msg).await?;
-                return Ok(());
+            Err(_) => {
+                println!("Erro de decode inesperado. Provavelmente HTML de erro. Pulando...");
+                continue;
             }
         };
         for m in models.model {
@@ -196,7 +198,7 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                 }
             }
         }
-        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        throttle().await;
     }
     (Label::LoadOk { entity: "Models" }).log();
     Ok(())
@@ -204,6 +206,15 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
 
 pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let models = select_models(conn)?;
+    if models.len() == 0 {
+        (Label::LoadOk { entity: "Years" }).log();
+        return Ok(());
+    }
+    let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarAnoModelo";
+    let client = reqwest::Client
+        ::builder()
+        .tcp_keepalive(std::time::Duration::from_secs(60))
+        .build()?;
     for m in &models {
         let body =
             serde_json::json!({
@@ -212,31 +223,13 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
             "codigoMarca": &m.brand_id,
             "codigoModelo": &m.fipe
         });
-        let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarAnoModelo";
-        let response = match
-            Client::new()
-                .post(url)
-                .header("Referer", "http://veiculos.fipe.org.br/")
-                .header("Content-Type", "application/json")
-                .body(body.to_string())
-                .send().await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                let err_msg = e.to_string();
-                (Label::ResponseError { message: &err_msg }).log();
-                insert_error(&conn, "Years", &url, &body.to_string(), &err_msg).await?;
-                exit(1);
-            }
-        };
+        let response = fetch_fipe(&client, &url, &body).await.unwrap();
 
         let years: Vec<FipeStruct> = match response.json().await {
             Ok(data) => data,
-            Err(e) => {
-                let err_msg = format!("JSON Parse Error: {}", e);
-                (Label::ResponseError { message: &err_msg }).log();
-                insert_error(&conn, "Years", &url, &body.to_string(), &err_msg).await?;
-                return Ok(());
+            Err(_) => {
+                println!("Erro de decode inesperado. Provavelmente HTML de erro. Pulando...");
+                continue;
             }
         };
         for y in years {
@@ -266,7 +259,7 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
                 }
             };
         }
-        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        throttle().await;
     }
     (Label::LoadOk { entity: "Years" }).log();
     Ok(())
