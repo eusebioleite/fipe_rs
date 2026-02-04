@@ -1,35 +1,33 @@
 # 🚗🦀 FIPE_rs
-A high-performance vehicle data crawler built with Rust. It extracts information from the Brazilian FIPE Table and persists it into a local SQLite database.
-
-## 🚀 Getting Started
+It extracts information from the Brazilian FIPE Table and persists it into a local SQLite database.
 
 ### Prerequisites
 - **Rust**
   
 ### Installation
 ```bash
-git clone [<your-repo-url>](https://github.com/eusebioleite/fipe_rs)
-cd fipe_rs-master
+git clone https://github.com/eusebioleite/fipe_rs
+cd fipe_rs
 ```
 
-### Running the App
+### Running
 ```bash
-cargo run --release
+cargo run
 ```
 
 ## Interface Guide
 The application runs as a terminal-based interactive menu:
 
-**Option 1:** Initialize/Reset Database (fipe_rs.db).
+**Option 1:** Create database.
 
-**Option 2:** Sync Reference Months.
+**Option 2:** Load References.
 
-**Option 3:** Fetch Brands (Car, Motorcycle, Truck).
+**Option 3:** Load Brands.
 
-**Option 4:** Fetch Models for all stored brands.
+**Option 4:** Load Models.
 
-**Option 5:** Fetch specific Years types for models.
+**Option 5:** Load Years.
 
-**Option 9:** Full Sync (Runs all steps sequentially).
+**Option 9:** Load All.
 
 **Option 0:** Safe Exit.
