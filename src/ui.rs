@@ -18,6 +18,7 @@ pub enum Sql {
     SelectReferences,
     SelectBrands,
     SelectModels,
+    SelectModelsReplicate,
     SelectConfig,
 
     // inserts / updates
@@ -406,22 +407,48 @@ impl Sql {
                     m.fipe,
                     b.fipe brand_id,
                     b.description brand_description,
-                    r.fipe AS ref_id,
+                    MAX(r.fipe) AS ref_id,
                     r."month" || '/' || r."year" ref_description,
                     b.type_id type_id,
                     t.description type_description
+                FROM
+                    models m
+                JOIN brands b ON
+                    m.brand_id = b.id
+                JOIN "references" r ON
+                    b.ref_id = r.id
+                JOIN types t ON
+                    b.type_id = t.id
+                WHERE
+                    NOT EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        years y
+                    WHERE
+                        y.model_id = m.id
+                )
+                GROUP BY
+                    m.fipe
+            "#
+            }
+            Sql::SelectModelsReplicate => {
+                r#"
+                SELECT
+                m.id,
+                m.description,
+                r."month" || '/' || r."year" ref_description
                 FROM models m
-                LEFT JOIN brands b ON m.brand_id = b.id
-                LEFT JOIN "references" r ON b.ref_id = r.id
-                LEFT JOIN types t ON b.type_id = t.id
-                WHERE NOT EXISTS (
+                left join brands b on m.brand_id = b.id
+                left join "references" r ON b.ref_id = r.id
+                WHERE m.fipe = ?1
+                AND NOT EXISTS (
                     SELECT 1
                     FROM years y
                     WHERE m.id = y.model_id
                 )
             "#
             }
-
             Sql::SelectConfig => "SELECT db_status, last_update FROM config",
 
             // inserts / updates

@@ -1,5 +1,11 @@
 use crate::schema::{ ReferencesResponse, ModelsResponse, FipeStruct };
-use crate::selects::{ select_types, select_references, select_brands, select_models };
+use crate::selects::{
+    select_brands,
+    select_models,
+    select_models_replicate,
+    select_references,
+    select_types,
+};
 use crate::ui::{ Label, Sql };
 use crate::utils::{ throttle };
 use reqwest::Client;
@@ -41,11 +47,15 @@ async fn fetch_fipe(
 }
 
 pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
-    let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarTabelaDeReferencia";
     let response = Client::new()
-        .post(url)
+        .post("https://veiculos.fipe.org.br/api/veiculos/ConsultarTabelaDeReferencia")
         .header("Referer", "http://veiculos.fipe.org.br/")
         .header("Content-Type", "application/json")
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+
         .send().await?;
 
     let references: Vec<ReferencesResponse> = response.json().await?;
@@ -232,32 +242,36 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
                 continue;
             }
         };
+
+        let models_replica = select_models_replicate(conn, &m.fipe)?;
         for y in years {
-            match conn.execute(Sql::InsertYear.as_str(), params![y.label, y.value, m.id]) {
-                Ok(_) => {
-                    (Label::InsertYear {
-                        tipo: &m.type_description,
-                        referencia: &m.ref_description,
-                        marca: &m.brand_description,
-                        modelo: &m.description,
-                        ano: &y.label,
-                        codigo: &y.value,
-                    }).log();
-                    ();
-                }
+            for mr in &models_replica {
+                match conn.execute(Sql::InsertYear.as_str(), params![y.label, y.value, mr.id]) {
+                    Ok(_) => {
+                        (Label::InsertYear {
+                            tipo: &m.type_description,
+                            referencia: &mr.ref_description,
+                            marca: &m.brand_description,
+                            modelo: &mr.description,
+                            ano: &y.label,
+                            codigo: &y.value,
+                        }).log();
+                        ();
+                    }
 
-                Err(rusqlite::Error::SqliteFailure(e, _)) if
-                    e.code == rusqlite::ErrorCode::ConstraintViolation
-                => {
-                    (Label::UniqueConstraint { fipe: &y.value }).log();
-                }
+                    Err(rusqlite::Error::SqliteFailure(e, _)) if
+                        e.code == rusqlite::ErrorCode::ConstraintViolation
+                    => {
+                        (Label::UniqueConstraint { fipe: &y.value }).log();
+                    }
 
-                Err(e) => {
-                    let err_msg = e.to_string();
-                    (Label::ResponseError { message: &err_msg }).log();
-                    exit(1);
-                }
-            };
+                    Err(e) => {
+                        let err_msg = e.to_string();
+                        (Label::ResponseError { message: &err_msg }).log();
+                        exit(1);
+                    }
+                };
+            }
         }
         throttle().await;
     }

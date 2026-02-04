@@ -49,6 +49,12 @@ pub struct Models {
     pub brand_description: String,
 }
 
+pub struct ModelsReplicate {
+    pub id: i32,
+    pub description: String,
+    pub ref_description: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ModelsResponse {
     #[serde(rename = "Modelos")]

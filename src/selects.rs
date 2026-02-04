@@ -1,4 +1,4 @@
-use crate::schema::{Brands, Models, References, Types};
+use crate::schema::{Brands, Models, ModelsReplicate, References, Types};
 use crate::ui::Sql;
 use rusqlite::{Connection, Result};
 pub fn select_types(conn: &Connection) -> Result<Vec<Types>, Box<dyn std::error::Error>> {
@@ -75,6 +75,26 @@ pub fn select_models(conn: &Connection) -> Result<Vec<Models>, Box<dyn std::erro
             type_description: row.get("type_description")?,
             brand_id: row.get("brand_id")?,
             brand_description: row.get("brand_description")?,
+        })
+    })?;
+
+    let mut models = Vec::new();
+    for model in model_iter {
+        models.push(model?);
+    }
+    Ok(models)
+}
+
+pub fn select_models_replicate(
+    conn: &Connection,
+    fipe: &str,
+) -> Result<Vec<ModelsReplicate>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(Sql::SelectModelsReplicate.as_str())?;
+    let model_iter = stmt.query_map([fipe], |row| {
+        Ok(ModelsReplicate {
+            id: row.get("id")?,
+            description: row.get("description")?,
+            ref_description: row.get("ref_description")?,
         })
     })?;
 
