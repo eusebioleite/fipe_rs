@@ -9,6 +9,7 @@ use crate::selects::{
 use crate::ui::{ Label, Sql };
 use crate::utils::{ throttle };
 use reqwest::Client;
+use rusqlite::types::Null;
 use rusqlite::{ params, Connection, Result };
 use std::process::exit;
 
@@ -245,8 +246,16 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
 
         let models_replica = select_models_replicate(conn, &m.fipe)?;
         for y in years {
+            let parts: Vec<&str> = y.value.split('-').collect();
+            let value = parts[0];
+            let fuel_id = parts.get(1);
             for mr in &models_replica {
-                match conn.execute(Sql::InsertYear.as_str(), params![y.label, y.value, mr.id]) {
+                match
+                    conn.execute(
+                        Sql::InsertYear.as_str(),
+                        params![y.label, value, y.value, mr.id, fuel_id]
+                    )
+                {
                     Ok(_) => {
                         (Label::InsertYear {
                             tipo: &m.type_description,

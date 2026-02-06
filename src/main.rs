@@ -22,8 +22,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let db_status: String = match config.db_status.as_str() {
             "empty" => "Empty".to_string().italic().to_string(),
             "stable" => "Stable".to_string().bright_green().to_string(),
-            "compromised" =>
-                "Compromised"
+            "Outdated" =>
+                "Outdated"
                     .to_string()
                     .bold()
                     .bright_red()
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Err(e) => {
                         let err_msg = e.to_string();
                         (Label::DbCreationErr { message: &err_msg }).log();
-                        update_status(&conn, "compromised")?;
+                        update_status(&conn, "outdated")?;
                     }
                 }
                 press_key_continue();

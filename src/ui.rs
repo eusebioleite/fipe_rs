@@ -9,6 +9,8 @@ pub enum Sql {
     CreateBrands,
     CreateReferences,
     CreateTypes,
+    CreateFuels,
+    InitFuels,
     InitTypes,
     CreateIndexes,
     CreateConfig,
@@ -326,17 +328,33 @@ impl Sql {
             "#
             }
 
+            Sql::CreateFuels => {
+                r#"
+                DROP TABLE IF EXISTS fuels;
+                CREATE TABLE fuels(
+                    id integer PRIMARY KEY,
+                    description text
+                )
+            "#
+            }
+
             Sql::InitTypes => "INSERT INTO types(description) VALUES (?1), (?2), (?3)",
+
+            Sql::InitFuels =>
+                "INSERT INTO fuels(description) VALUES (?1), (?2), (?3), (?4), (?5), (?6), (?7)",
+
             Sql::CreateIndexes => {
                 r#"
                 CREATE INDEX idx_references_id ON "references" (id);
                 CREATE INDEX idx_types_id ON types (id);
+                CREATE INDEX idx_fuels_id ON fuels (id);
                 CREATE INDEX idx_brands_ref_id ON brands (ref_id);
                 CREATE INDEX idx_brands_type_id ON brands (type_id);
                 CREATE INDEX idx_brands_id ON brands (id);
                 CREATE INDEX idx_models_brand_id ON models (brand_id);
                 CREATE INDEX idx_models_id ON models (id);
                 CREATE INDEX idx_years_model_id ON years (model_id);
+                CREATE INDEX idx_years_fuel_id ON years (fuel_id);
             "#
             }
 
@@ -465,7 +483,7 @@ impl Sql {
             }
 
             Sql::InsertYear => {
-                "INSERT INTO years (description, fipe, model_id) VALUES (?1, ?2, ?3)"
+                "INSERT INTO years (description, value, fipe, model_id, fuel_id) VALUES (?1, ?2, ?3, ?4, ?5)"
             }
 
             Sql::UpdateConfig => {

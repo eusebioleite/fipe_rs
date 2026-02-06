@@ -18,6 +18,19 @@ pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::er
         (Label::CreateTable { table_name: "types" }).log();
         conn.execute_batch(Sql::CreateTypes.as_str())?;
         conn.execute(Sql::InitTypes.as_str(), ["Carros", "Motos", "Caminhões e Micro-Ônibus"])?;
+        // Fuels
+        (Label::CreateTable { table_name: "fuels" }).log();
+        conn.execute_batch(Sql::CreateFuels.as_str())?;
+        conn.execute(Sql::InitTypes.as_str(), [
+            "Gasolina",
+            "Álcool",
+            "Diesel",
+            "Gás Natural",
+            "Flex",
+            "Elétrico",
+            "Híbrido",
+            "Híbrido Plug-in",
+        ])?;
         // Brands
         conn.execute_batch(Sql::CreateBrands.as_str())?;
         (Label::CreateTable { table_name: "brands" }).log();
