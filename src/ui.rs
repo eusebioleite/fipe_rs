@@ -40,6 +40,7 @@ pub enum Label<'a> {
     },
 
     // setup_db
+    DbCreationOk,
     CreateTable {
         table_name: &'a str,
     },
@@ -153,7 +154,7 @@ impl<'a> fmt::Display for Label<'a> {
             ),
             Label::LoadOk { entity } => write!(
                 f,
-                "{}: {}",
+                "  {}  {}",
                 "[SUCCESS]".bold().bright_green(),
                 format!(" {} successfully loaded.", entity.blue()).bold()
             ),
@@ -168,7 +169,7 @@ impl<'a> fmt::Display for Label<'a> {
             }
             Label::InsertReference { codigo, mes } => write!(
                 f,
-                "{}: {} - {}",
+                "  {}  {} - {}",
                 "[SUCCESS]".bold().bright_green(),
                 codigo,
                 mes
@@ -221,7 +222,7 @@ impl<'a> fmt::Display for Label<'a> {
                 codigo,
             } => write!(
                 f,
-                "{} | {} | {} | {} | {}: {} - {}",
+                "   {} | {} | {} | {} | {}: {} - {}",
                 tipo.bold().blue(),
                 referencia.bold().yellow(),
                 marca.bold().red(),
@@ -234,6 +235,12 @@ impl<'a> fmt::Display for Label<'a> {
                 f,
                 "{}",
                 "Press any key to continue...".italic().black().dimmed()
+            ),
+            Label::DbCreationOk => write!(
+                f,
+                "  {}  {}",
+                "[SUCCESS]".bold().bright_green(),
+                "Database successfully created.".italic()
             ),
         }
     }
@@ -341,8 +348,7 @@ impl Sql {
                 r#"
                 CREATE TABLE "references"(
                     id integer PRIMARY KEY,
-                    month text,
-                    year text,
+                    ref_date date,
                     fipe text unique
                 )
             "#
@@ -498,7 +504,7 @@ impl Sql {
 
             // inserts / updates
             Sql::InsertReference => {
-                "INSERT INTO \"references\" (month, year, fipe) VALUES (?1, ?2, ?3)"
+                "INSERT INTO \"references\" (ref_date, fipe) VALUES (?1, ?2)"
             }
 
             Sql::InsertBrand => {

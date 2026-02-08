@@ -7,9 +7,9 @@ use crate::selects::{
     select_types,
 };
 use crate::ui::{ Label, Sql };
-use crate::utils::{ throttle };
+use crate::utils::{ throttle, parse_date, progress_bar };
+use indicatif::{ ProgressBar, ProgressStyle };
 use reqwest::Client;
-use rusqlite::types::Null;
 use rusqlite::{ params, Connection, Result };
 use std::process::exit;
 
@@ -60,17 +60,20 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
         .send().await?;
 
     let references: Vec<ReferencesResponse> = response.json().await?;
+    let steps: u64 = references.len().try_into().unwrap();
+    let pb = progress_bar(steps);
 
     for r in &references {
         let codigo = r.codigo.to_string();
-        match
-            conn.execute(
-                Sql::InsertReference.as_str(),
-                params![r.mes.split('/').nth(0), r.mes.split('/').nth(1), r.codigo]
-            )
-        {
+        match conn.execute(Sql::InsertReference.as_str(), params![parse_date(&r.mes), r.codigo]) {
             Ok(_) => {
-                (Label::InsertReference { codigo: &codigo, mes: &r.mes }).log();
+                pb.set_message(
+                    (Label::InsertReference {
+                        codigo: &r.codigo.to_string(),
+                        mes: &r.mes,
+                    }).to_string()
+                );
+                pb.inc(1);
                 ();
             }
 
@@ -92,7 +95,7 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
             }
         }
     }
-    (Label::LoadOk { entity: "References" }).log();
+    pb.finish_with_message((Label::LoadOk { entity: "References" }).to_string());
     Ok(())
 }
 

@@ -1,26 +1,34 @@
 use crate::ui::{ Label, Sql };
 use crate::schema::Config;
 
+use indicatif::{ ProgressBar, ProgressStyle };
 use rand::{ Rng };
 use rusqlite::{ params, Connection, Result };
-use std::io::{ self, Write };
+use std::io::{ Write };
 pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::error::Error>> {
     if recreate {
+        let pb = progress_bar(11);
         // Drops
         conn.execute_batch(Sql::DropTables.as_str())?;
+        pb.inc(1);
         // Config
-        (Label::CreateTable { table_name: "config" }).log();
+        pb.set_message((Label::CreateTable { table_name: "config" }).to_string());
         conn.execute_batch(Sql::CreateConfig.as_str())?;
+        pb.inc(1);
         // References
-        (Label::CreateTable { table_name: "references" }).log();
+        pb.set_message((Label::CreateTable { table_name: "references" }).to_string());
         conn.execute_batch(Sql::CreateReferences.as_str())?;
+        pb.inc(1);
         // Types
-        (Label::CreateTable { table_name: "types" }).log();
+        pb.set_message((Label::CreateTable { table_name: "types" }).to_string());
         conn.execute_batch(Sql::CreateTypes.as_str())?;
+        pb.inc(1);
         conn.execute(Sql::InitTypes.as_str(), ["Carros", "Motos", "Caminhões e Micro-Ônibus"])?;
+        pb.inc(1);
         // Fuels
-        (Label::CreateTable { table_name: "fuels" }).log();
+        pb.set_message((Label::CreateTable { table_name: "fuels" }).to_string());
         conn.execute_batch(Sql::CreateFuels.as_str())?;
+        pb.inc(1);
         conn.execute(Sql::InitFuels.as_str(), [
             "Gasolina",
             "Álcool",
@@ -31,19 +39,25 @@ pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::er
             "Híbrido",
             "Híbrido Plug-in",
         ])?;
+        pb.inc(1);
         // Brands
         conn.execute_batch(Sql::CreateBrands.as_str())?;
-        (Label::CreateTable { table_name: "brands" }).log();
+        pb.inc(1);
+        pb.set_message((Label::CreateTable { table_name: "brands" }).to_string());
         // Models
-        (Label::CreateTable { table_name: "models" }).log();
+        pb.set_message((Label::CreateTable { table_name: "models" }).to_string());
         conn.execute_batch(Sql::CreateModels.as_str())?;
+        pb.inc(1);
         // Years
-        (Label::CreateTable { table_name: "years" }).log();
+        pb.set_message((Label::CreateTable { table_name: "years" }).to_string());
         conn.execute_batch(Sql::CreateYears.as_str())?;
+        pb.inc(1);
         // Indexes
-        Label::CreateIndexes.log();
+        pb.set_message(Label::CreateIndexes.to_string());
         conn.execute_batch(Sql::CreateIndexes.as_str())?;
+        pb.inc(1);
 
+        pb.finish_with_message(Label::DbCreationOk.to_string());
         Ok(())
     } else {
         Ok(())
@@ -98,4 +112,42 @@ pub fn press_key_continue() {
 
 pub async fn throttle() {
     tokio::time::sleep(tokio::time::Duration::from_secs(rand::rng().random_range(1..3))).await;
+}
+
+pub fn parse_date(mes_ano: &str) -> String {
+    let date = mes_ano.trim();
+    let parts: Vec<&str> = date.split('/').collect();
+    if parts.len() != 2 {
+        return "1900-01-01".to_string();
+    }
+
+    let month_num = match parts[0].to_lowercase().as_str() {
+        "janeiro" => "01",
+        "fevereiro" => "02",
+        "março" => "03",
+        "abril" => "04",
+        "maio" => "05",
+        "junho" => "06",
+        "julho" => "07",
+        "agosto" => "08",
+        "setembro" => "09",
+        "outubro" => "10",
+        "novembro" => "11",
+        "dezembro" => "12",
+        _ => "01",
+    };
+
+    format!("{}-{}-01", parts[1], month_num)
+}
+
+pub fn progress_bar(len: u64) -> ProgressBar {
+    let pb = ProgressBar::new(len);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})"
+        )
+            .unwrap()
+            .progress_chars("#>-")
+    );
+    pb
 }
