@@ -21,7 +21,7 @@ pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::er
         // Fuels
         (Label::CreateTable { table_name: "fuels" }).log();
         conn.execute_batch(Sql::CreateFuels.as_str())?;
-        conn.execute(Sql::InitTypes.as_str(), [
+        conn.execute(Sql::InitFuels.as_str(), [
             "Gasolina",
             "Álcool",
             "Diesel",

@@ -1,3 +1,4 @@
+use inquire::Select;
 use owo_colors::OwoColorize;
 use std::fmt;
 
