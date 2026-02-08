@@ -34,14 +34,9 @@ pub enum Sql {
 
 pub enum Label<'a> {
     // main
-    MenuOptions {
+    Header {
         db_status: &'a str,
         last_update: &'a str,
-    },
-    InvalidInput,
-    DbCreationOk,
-    DbCreationErr {
-        message: &'a str,
     },
 
     // setup_db
@@ -65,6 +60,7 @@ pub enum Label<'a> {
     UniqueConstraint {
         fipe: &'a str,
     },
+    TableNotExist,
     InsertReference {
         codigo: &'a str,
         mes: &'a str,
@@ -93,50 +89,41 @@ pub enum Label<'a> {
     PressKeyContinue,
 }
 
+pub enum MainMenu {
+    Loads,
+    Maintenance,
+    Exit,
+}
+pub enum MaintMenu {
+    RecreateDatabase,
+    CheckUpdates,
+    Back,
+}
+
+pub enum LoadMenu {
+    LoadRefs,
+    LoadBrands,
+    LoadModels,
+    LoadYears,
+    Back,
+}
+
 impl<'a> fmt::Display for Label<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Label::MenuOptions {
+            Label::Header {
                 db_status,
                 last_update,
             } => write!(
                 f,
-                "{}\n{} {}\n{} {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}\n{} - {}",
+                "{}\n{} {}\n{} {}\n",
                 "FIPE_rs".bold().bright_cyan(),
                 "DB Status:".bold().yellow(),
                 db_status.bold(),
                 "Last Update:".bold().black().dimmed(),
-                last_update.italic().black().dimmed(),
-                "1".bold().bright_green(),
-                "Recreate Database",
-                "2".bold().bright_green(),
-                "Load References",
-                "3".bold().bright_green(),
-                "Load Brands",
-                "4".bold().bright_green(),
-                "Load Models",
-                "5".bold().bright_green(),
-                "Load Years",
-                "9".bold().bright_green(),
-                "Load All",
-                "0".bold().bright_green(),
-                "Exit"
+                last_update.italic().black().dimmed()
             ),
-            Label::InvalidInput => write!(
-                f,
-                "{}: {}",
-                "[ERROR]".bold().bright_red(),
-                "Invalid input.".italic().black().dimmed()
-            ),
-            Label::DbCreationOk => write!(
-                f,
-                "{}: {}",
-                "[SUCCESS]".bold().bright_green(),
-                "Succesfully recreated the database.".bold()
-            ),
-            Label::DbCreationErr { message }
-            | Label::ResponseError { message }
-            | Label::ApiConnectionError { message } => write!(
+            Label::ResponseError { message } | Label::ApiConnectionError { message } => write!(
                 f,
                 "{}: {}",
                 "[ERROR]".bold().bright_red(),
@@ -185,6 +172,15 @@ impl<'a> fmt::Display for Label<'a> {
                 "[SUCCESS]".bold().bright_green(),
                 codigo,
                 mes
+            ),
+            Label::TableNotExist => write!(
+                f,
+                "{}: {}",
+                "[ERROR]".bold().bright_red(),
+                "A table does not exist! Please recreate the database first."
+                    .italic()
+                    .black()
+                    .dimmed()
             ),
             Label::InsertBrand {
                 tipo,
@@ -248,6 +244,39 @@ impl<'a> Label<'a> {
         println!("{}", self);
     }
 }
+
+impl fmt::Display for MainMenu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MainMenu::Loads => write!(f, "📥 Loads"),
+            MainMenu::Maintenance => write!(f, "🛠️  Maintenance"),
+            MainMenu::Exit => write!(f, "🔌 Exit"),
+        }
+    }
+}
+
+impl fmt::Display for LoadMenu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LoadMenu::LoadRefs => write!(f, "Load References"),
+            LoadMenu::LoadBrands => write!(f, "Load Brands"),
+            LoadMenu::LoadModels => write!(f, "Load Models"),
+            LoadMenu::LoadYears => write!(f, "Load Years"),
+            LoadMenu::Back => write!(f, "Back"),
+        }
+    }
+}
+
+impl fmt::Display for MaintMenu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MaintMenu::RecreateDatabase => write!(f, "Recreate Database"),
+            MaintMenu::CheckUpdates => write!(f, "Check for Updates"),
+            MaintMenu::Back => write!(f, "Back"),
+        }
+    }
+}
+
 impl Sql {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -259,19 +288,21 @@ impl Sql {
                 DROP TABLE IF EXISTS models;
                 DROP TABLE IF EXISTS brands;
                 DROP TABLE IF EXISTS "references";
+                DROP TABLE IF EXISTS fuels;
                 DROP TABLE IF EXISTS types;
             "#
             }
 
             Sql::CreateYears => {
                 r#"
-                DROP TABLE IF EXISTS years;
                 CREATE TABLE years(
                     id integer PRIMARY KEY,
                     description text,
                     fipe text,
                     model_id integer,
+                    fuel_id integer,
                     foreign key(model_id) references models(id),
+                    foreign key(fuel_id) references fuels(id),
                     unique(fipe, model_id)
                 )
             "#
@@ -293,7 +324,6 @@ impl Sql {
 
             Sql::CreateBrands => {
                 r#"
-                DROP TABLE IF EXISTS brands;
                 CREATE TABLE brands(
                     id integer PRIMARY KEY,
                     description text,
@@ -309,7 +339,6 @@ impl Sql {
 
             Sql::CreateReferences => {
                 r#"
-                DROP TABLE IF EXISTS "references";
                 CREATE TABLE "references"(
                     id integer PRIMARY KEY,
                     month text,
@@ -321,7 +350,6 @@ impl Sql {
 
             Sql::CreateTypes => {
                 r#"
-                DROP TABLE IF EXISTS types;
                 CREATE TABLE types(
                     id integer PRIMARY KEY,
                     description text
@@ -331,7 +359,6 @@ impl Sql {
 
             Sql::CreateFuels => {
                 r#"
-                DROP TABLE IF EXISTS fuels;
                 CREATE TABLE fuels(
                     id integer PRIMARY KEY,
                     description text
@@ -342,7 +369,7 @@ impl Sql {
             Sql::InitTypes => "INSERT INTO types(description) VALUES (?1), (?2), (?3)",
 
             Sql::InitFuels =>
-                "INSERT INTO fuels(description) VALUES (?1), (?2), (?3), (?4), (?5), (?6), (?7)",
+                "INSERT INTO fuels(description) VALUES (?1), (?2), (?3), (?4), (?5), (?6), (?7), (?8)",
 
             Sql::CreateIndexes => {
                 r#"
@@ -361,7 +388,6 @@ impl Sql {
 
             Sql::CreateConfig => {
                 r#"
-                DROP TABLE IF EXISTS config;
                 CREATE TABLE config(
                     db_status text,
                     last_update date

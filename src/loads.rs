@@ -80,6 +80,11 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
                 (Label::UniqueConstraint { fipe: &codigo }).log();
             }
 
+            Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if msg.contains("no such table") => {
+                Label::TableNotExist.log();
+                return Ok(());
+            }
+
             Err(e) => {
                 let err_msg = e.to_string();
                 (Label::ResponseError { message: &err_msg }).log();
@@ -92,8 +97,19 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
 }
 
 pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
-    let types = select_types(conn)?;
-    let references = select_references(conn)?;
+    let types = match select_types(conn) {
+        Ok(vt) => vt,
+        Err(e) => {
+            return Ok(());
+        }
+    };
+    let references = match select_references(conn) {
+        Ok(vr) => vr,
+        Err(e) => {
+            return Ok(());
+        }
+    };
+
     if references.len() == 0 {
         (Label::LoadOk { entity: "Brands" }).log();
         return Ok(());
@@ -112,7 +128,6 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                 "codigoTabelaReferencia": &r.fipe
             });
 
-            // Chama nossa função robusta
             let response = fetch_fipe(&client, url, &body).await.unwrap();
 
             let brands: Vec<FipeStruct> = match response.json().await {
@@ -142,6 +157,19 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                         (Label::UniqueConstraint { fipe: &b.value }).log();
                     }
 
+                    Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if
+                        msg.contains("no such table")
+                    => {
+                        Label::TableNotExist.log();
+                        return Ok(());
+                    }
+
+                    Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if
+                        msg.contains("no such table")
+                    => {
+                        Label::TableNotExist.log();
+                        return Ok(());
+                    }
                     Err(e) => {
                         let err_msg = e.to_string();
                         (Label::ResponseError { message: &err_msg }).log();
@@ -157,7 +185,12 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
 }
 
 pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
-    let brands = select_brands(conn)?;
+    let brands = match select_brands(conn) {
+        Ok(vb) => vb,
+        Err(e) => {
+            return Ok(());
+        }
+    };
     if brands.len() == 0 {
         (Label::LoadOk { entity: "Models" }).log();
         return Ok(());
@@ -202,6 +235,12 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                     (Label::UniqueConstraint { fipe: &m.value.to_string() }).log();
                 }
 
+                Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if
+                    msg.contains("no such table")
+                => {
+                    Label::TableNotExist.log();
+                    return Ok(());
+                }
                 Err(e) => {
                     let err_msg = e.to_string();
                     (Label::ResponseError { message: &err_msg }).log();
@@ -216,7 +255,12 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
 }
 
 pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
-    let models = select_models(conn)?;
+    let models = match select_models(conn) {
+        Ok(vm) => vm,
+        Err(e) => {
+            return Ok(());
+        }
+    };
     if models.len() == 0 {
         (Label::LoadOk { entity: "Years" }).log();
         return Ok(());
@@ -274,6 +318,12 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
                         (Label::UniqueConstraint { fipe: &y.value }).log();
                     }
 
+                    Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if
+                        msg.contains("no such table")
+                    => {
+                        Label::TableNotExist.log();
+                        return Ok(());
+                    }
                     Err(e) => {
                         let err_msg = e.to_string();
                         (Label::ResponseError { message: &err_msg }).log();

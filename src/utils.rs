@@ -3,7 +3,7 @@ use crate::schema::Config;
 
 use rand::{ Rng };
 use rusqlite::{ params, Connection, Result };
-use std::io::{ self };
+use std::io::{ self, Write };
 pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::error::Error>> {
     if recreate {
         // Drops
@@ -90,7 +90,10 @@ pub fn clear_screen() {
 pub fn press_key_continue() {
     Label::PressKeyContinue.log();
     let mut input = String::new();
-    let _ = io::stdin().read_line(&mut input);
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stdin().read_line(&mut input);
+    clear_screen();
+    let _ = std::io::stdout().flush();
 }
 
 pub async fn throttle() {

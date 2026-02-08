@@ -1,8 +1,19 @@
 use crate::schema::{Brands, Models, ModelsReplicate, References, Types};
-use crate::ui::Sql;
+use crate::ui::{Label, Sql};
 use rusqlite::{Connection, Result};
 pub fn select_types(conn: &Connection) -> Result<Vec<Types>, Box<dyn std::error::Error>> {
-    let mut stmt = conn.prepare(Sql::SelectTypes.as_str())?;
+    let mut stmt = match conn.prepare(Sql::SelectTypes.as_str()) {
+        Ok(s) => s,
+
+        Err(rusqlite::Error::SqliteFailure(e, Some(msg))) if msg.contains("no such table") => {
+            Label::TableNotExist.log();
+            return Err(Box::new(e));
+        }
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+
     let types_iter = stmt.query_map([], |row| {
         Ok(Types {
             id: row.get(0)?,
@@ -20,7 +31,17 @@ pub fn select_types(conn: &Connection) -> Result<Vec<Types>, Box<dyn std::error:
 // References
 
 pub fn select_references(conn: &Connection) -> Result<Vec<References>, Box<dyn std::error::Error>> {
-    let mut stmt = conn.prepare(Sql::SelectReferences.as_str())?;
+    let mut stmt = match conn.prepare(Sql::SelectReferences.as_str()) {
+        Ok(s) => s,
+
+        Err(rusqlite::Error::SqliteFailure(e, Some(msg))) if msg.contains("no such table") => {
+            Label::TableNotExist.log();
+            return Err(Box::new(e));
+        }
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
     let reference_iter = stmt.query_map([], |row| {
         Ok(References {
             id: row.get(0)?,
@@ -40,7 +61,18 @@ pub fn select_references(conn: &Connection) -> Result<Vec<References>, Box<dyn s
 // Brands
 
 pub fn select_brands(conn: &Connection) -> Result<Vec<Brands>, Box<dyn std::error::Error>> {
-    let mut stmt = conn.prepare(Sql::SelectBrands.as_str())?;
+    let mut stmt = match conn.prepare(Sql::SelectBrands.as_str()) {
+        Ok(s) => s,
+
+        Err(rusqlite::Error::SqliteFailure(e, Some(msg))) if msg.contains("no such table") => {
+            Label::TableNotExist.log();
+            return Err(Box::new(e));
+        }
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+
     let brand_iter = stmt.query_map([], |row| {
         Ok(Brands {
             id: row.get(0)?,
@@ -63,7 +95,18 @@ pub fn select_brands(conn: &Connection) -> Result<Vec<Brands>, Box<dyn std::erro
 // Models
 
 pub fn select_models(conn: &Connection) -> Result<Vec<Models>, Box<dyn std::error::Error>> {
-    let mut stmt = conn.prepare(Sql::SelectModels.as_str())?;
+    let mut stmt = match conn.prepare(Sql::SelectModels.as_str()) {
+        Ok(s) => s,
+
+        Err(rusqlite::Error::SqliteFailure(e, Some(msg))) if msg.contains("no such table") => {
+            Label::TableNotExist.log();
+            return Err(Box::new(e));
+        }
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+
     let model_iter = stmt.query_map([], |row| {
         Ok(Models {
             id: row.get("id")?,
@@ -89,7 +132,18 @@ pub fn select_models_replicate(
     conn: &Connection,
     fipe: &str,
 ) -> Result<Vec<ModelsReplicate>, Box<dyn std::error::Error>> {
-    let mut stmt = conn.prepare(Sql::SelectModelsReplicate.as_str())?;
+    let mut stmt = match conn.prepare(Sql::SelectModelsReplicate.as_str()) {
+        Ok(s) => s,
+
+        Err(rusqlite::Error::SqliteFailure(e, Some(msg))) if msg.contains("no such table") => {
+            Label::TableNotExist.log();
+            return Err(Box::new(e));
+        }
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+
     let model_iter = stmt.query_map([fipe], |row| {
         Ok(ModelsReplicate {
             id: row.get("id")?,
