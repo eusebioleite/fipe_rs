@@ -3,10 +3,12 @@ mod schema;
 mod loads;
 mod selects;
 mod utils;
+mod config;
 
 use loads::{ load_brands, load_models, load_references, load_years };
 use ui::{ Label, MainMenu, MaintMenu, LoadMenu };
-use utils::{ clear_screen, press_key_continue, setup_db, select_status, update_status };
+use utils::{ clear_screen, press_key_continue };
+use config::{ setup_db, update_status, select_status };
 use rusqlite::{ Connection, Result };
 use owo_colors::OwoColorize;
 use inquire::Select;
@@ -18,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         clear_screen();
 
-        let config = select_status(&conn).await?;
+        let config = select_status(&conn)?;
         let db_status = match config.db_status.as_str() {
             "empty" => "Empty".italic().to_string(),
             "stable" => "Stable".bright_green().to_string(),

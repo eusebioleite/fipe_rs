@@ -1,3 +1,4 @@
+use crate::config::select_rowcount;
 use crate::schema::{ ReferencesResponse, ModelsResponse, FipeStruct };
 use crate::selects::{
     select_brands,
@@ -60,12 +61,14 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
         .send().await?;
 
     let references: Vec<ReferencesResponse> = response.json().await?;
-    let steps: u64 = references.len().try_into().unwrap();
-    let pb = progress_bar(steps);
+    let len: u64 = references.len().try_into().unwrap();
+    let pb = progress_bar(len);
 
     for r in &references {
         let codigo = r.codigo.to_string();
-        match conn.execute(Sql::InsertReference.as_str(), params![parse_date(&r.mes), r.codigo]) {
+        match
+            conn.execute(Sql::InsertReference.get().as_str(), params![parse_date(&r.mes), r.codigo])
+        {
             Ok(_) => {
                 pb.set_message(
                     (Label::InsertReference {
@@ -100,29 +103,36 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
 }
 
 pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let count: u64 = select_rowcount(conn)?.brands_rowcount.try_into().unwrap();
+    println!("{}", count.to_string());
+    let pb = progress_bar(count);
+
     let types = match select_types(conn) {
         Ok(vt) => vt,
-        Err(e) => {
-            return Ok(());
-        }
-    };
-    let references = match select_references(conn) {
-        Ok(vr) => vr,
-        Err(e) => {
+        Err(_) => {
+            Label::TableNotExist.log();
             return Ok(());
         }
     };
 
-    if references.len() == 0 {
-        (Label::LoadOk { entity: "Brands" }).log();
+    let references = match select_references(conn) {
+        Ok(vr) => vr,
+        Err(_) => {
+            Label::TableNotExist.log();
+            return Ok(());
+        }
+    };
+
+    if references.len() == 0 || types.len() == 0 {
+        Label::NoResults.log();
         return Ok(());
     }
+
     let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarMarcas";
     let client = reqwest::Client
         ::builder()
         .tcp_keepalive(std::time::Duration::from_secs(60))
         .build()?;
-
     for t in &types {
         for r in &references {
             let body =
@@ -142,40 +152,39 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
             };
             for b in brands {
                 match
-                    conn.execute(Sql::InsertBrand.as_str(), params![b.label, b.value, t.id, r.id])
+                    conn.execute(
+                        Sql::InsertBrand.get().as_str(),
+                        params![b.label, b.value, t.id, r.id]
+                    )
                 {
                     Ok(_) => {
-                        (Label::InsertBrand {
-                            tipo: &t.description,
-                            referencia: format!("{}/{}", &r.month, &r.year).as_str(),
-                            marca: &b.label,
-                            codigo: &b.value,
-                        }).log();
+                        pb.set_message(
+                            (Label::InsertBrand {
+                                tipo: &t.description,
+                                referencia: &r.ref_date,
+                                marca: &b.label,
+                                codigo: &b.value,
+                            }).to_string()
+                        );
+                        pb.inc(1);
                         ();
                     }
 
                     Err(rusqlite::Error::SqliteFailure(e, _)) if
                         e.code == rusqlite::ErrorCode::ConstraintViolation
                     => {
-                        (Label::UniqueConstraint { fipe: &b.value }).log();
+                        pb.set_message((Label::UniqueConstraint { fipe: &b.value }).to_string());
                     }
 
                     Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if
                         msg.contains("no such table")
                     => {
-                        Label::TableNotExist.log();
-                        return Ok(());
-                    }
-
-                    Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if
-                        msg.contains("no such table")
-                    => {
-                        Label::TableNotExist.log();
+                        pb.set_message(Label::TableNotExist.to_string());
                         return Ok(());
                     }
                     Err(e) => {
                         let err_msg = e.to_string();
-                        (Label::ResponseError { message: &err_msg }).log();
+                        pb.set_message((Label::ResponseError { message: &err_msg }).to_string());
                         exit(1);
                     }
                 };
@@ -183,14 +192,14 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
             throttle().await;
         }
     }
-    (Label::LoadOk { entity: "Brands" }).log();
+    pb.finish_with_message((Label::LoadOk { entity: "Brands" }).to_string());
     Ok(())
 }
 
 pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let brands = match select_brands(conn) {
         Ok(vb) => vb,
-        Err(e) => {
+        Err(_e) => {
             return Ok(());
         }
     };
@@ -220,7 +229,7 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
             }
         };
         for m in models.model {
-            match conn.execute(Sql::InsertModel.as_str(), params![m.label, m.value, b.id]) {
+            match conn.execute(Sql::InsertModel.get().as_str(), params![m.label, m.value, b.id]) {
                 Ok(_) => {
                     (Label::InsertModel {
                         tipo: &b.type_description,
@@ -260,7 +269,7 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
 pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let models = match select_models(conn) {
         Ok(vm) => vm,
-        Err(e) => {
+        Err(_e) => {
             return Ok(());
         }
     };
@@ -299,7 +308,7 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
             for mr in &models_replica {
                 match
                     conn.execute(
-                        Sql::InsertYear.as_str(),
+                        Sql::InsertYear.get().as_str(),
                         params![y.label, value, y.value, mr.id, fuel_id]
                     )
                 {

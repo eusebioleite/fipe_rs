@@ -11,8 +11,7 @@ pub struct Types {
 #[derive(Debug, Deserialize)]
 pub struct References {
     pub id: i32,
-    pub month: String,
-    pub year: String,
+    pub ref_date: String,
     pub fipe: String,
 }
 
@@ -80,7 +79,19 @@ pub struct FipeStruct {
 
 // Utilities
 #[derive(Debug, Deserialize)]
-pub struct Config {
+pub struct Status {
     pub db_status: String,
     pub last_update: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RowCount {
+    pub brands_rowcount: i32,
+    pub models_rowcount: i32,
+    pub years_rowcount: i32,
+    pub vehicles_rowcount: i32,
+}
+
+pub struct Count {
+    pub count: i32,
 }
