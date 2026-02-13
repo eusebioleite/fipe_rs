@@ -9,10 +9,12 @@ use crate::selects::{
 };
 use crate::ui::{ Label, Sql };
 use crate::utils::{ throttle, parse_date, progress_bar };
+use chrono::{ Datelike, Utc };
 use indicatif::{ ProgressBar, ProgressStyle };
 use reqwest::Client;
 use rusqlite::{ params, Connection, Result };
 use std::process::exit;
+use std::time::SystemTime;
 
 async fn fetch_fipe(
     client: &reqwest::Client,
@@ -104,7 +106,6 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
 
 pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let count: u64 = select_rowcount(conn)?.brands_rowcount.try_into().unwrap();
-    println!("{}", count.to_string());
     let pb = progress_bar(count);
 
     let types = match select_types(conn) {
@@ -197,6 +198,9 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
 }
 
 pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let count: u64 = select_rowcount(conn)?.models_rowcount.try_into().unwrap();
+    let pb = progress_bar(count);
+
     let brands = match select_brands(conn) {
         Ok(vb) => vb,
         Err(_e) => {
@@ -208,7 +212,7 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
         return Ok(());
     }
     let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarModelos";
-    let client = reqwest::Client
+    let client: Client = reqwest::Client
         ::builder()
         .tcp_keepalive(std::time::Duration::from_secs(60))
         .build()?;
@@ -231,13 +235,16 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
         for m in models.model {
             match conn.execute(Sql::InsertModel.get().as_str(), params![m.label, m.value, b.id]) {
                 Ok(_) => {
-                    (Label::InsertModel {
-                        tipo: &b.type_description,
-                        referencia: &b.ref_description,
-                        marca: &b.description,
-                        modelo: &m.label,
-                        codigo: &m.value.to_string(),
-                    }).log();
+                    pb.inc(1);
+                    pb.set_message(
+                        (Label::InsertModel {
+                            tipo: &b.type_description,
+                            referencia: &b.ref_description,
+                            marca: &b.description,
+                            modelo: &m.label,
+                            codigo: &m.value.to_string(),
+                        }).to_string()
+                    );
                     ();
                 }
 
@@ -262,11 +269,14 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
         }
         throttle().await;
     }
-    (Label::LoadOk { entity: "Models" }).log();
+    pb.finish_with_message((Label::LoadOk { entity: "Models" }).to_string());
     Ok(())
 }
 
 pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let count: u64 = select_rowcount(conn)?.years_rowcount.try_into().unwrap();
+    let pb = progress_bar(count);
+
     let models = match select_models(conn) {
         Ok(vm) => vm,
         Err(_e) => {
@@ -303,7 +313,12 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
         let models_replica = select_models_replicate(conn, &m.fipe)?;
         for y in years {
             let parts: Vec<&str> = y.value.split('-').collect();
-            let value = parts[0];
+            let year_str = if parts[0].trim() == "32000" {
+                Utc::now().year().to_string()
+            } else {
+                parts[0].trim().to_string()
+            };
+            let value = format!("{}-01-01", year_str);
             let fuel_id = parts.get(1);
             for mr in &models_replica {
                 match
@@ -313,14 +328,16 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
                     )
                 {
                     Ok(_) => {
-                        (Label::InsertYear {
-                            tipo: &m.type_description,
-                            referencia: &mr.ref_description,
-                            marca: &m.brand_description,
-                            modelo: &mr.description,
-                            ano: &y.label,
-                            codigo: &y.value,
-                        }).log();
+                        pb.inc(1);
+                        pb.set_message(
+                            (Label::InsertYear {
+                                tipo: &m.type_description,
+                                referencia: &mr.ref_description,
+                                marca: &m.brand_description,
+                                modelo: &mr.description,
+                                ano: &y.label,
+                            }).to_string()
+                        );
                         ();
                     }
 
@@ -346,6 +363,6 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
         }
         throttle().await;
     }
-    (Label::LoadOk { entity: "Years" }).log();
+    pb.finish_with_message((Label::LoadOk { entity: "Years" }).to_string());
     Ok(())
 }

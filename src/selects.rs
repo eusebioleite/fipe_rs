@@ -14,7 +14,12 @@ pub fn select_types(conn: &Connection) -> Result<Vec<Types>, Box<dyn std::error:
         }
     };
 
-    let types_iter = stmt.query_map([], |row| Ok(Types { id: row.get(0)?, description: row.get(1)? }))?;
+    let types_iter = stmt.query_map([], |row| {
+        Ok(Types {
+            id: row.get(0)?,
+            description: row.get(1)?,
+        })
+    })?;
 
     let mut types = Vec::new();
     for t in types_iter {
@@ -37,7 +42,14 @@ pub fn select_references(conn: &Connection) -> Result<Vec<References>, Box<dyn s
             return Err(Box::new(e));
         }
     };
-    let reference_iter = stmt.query_map([], |row| Ok(References { id: row.get("id")?, ref_date: row.get("ref_date")?, fipe: row.get("fipe")? }))?;
+    let reference_iter = stmt.query_map([], |row| {
+        Ok(References {
+            id: row.get("id")?,
+            description: row.get("description")?,
+            ref_date: row.get("ref_date")?,
+            fipe: row.get("fipe")?,
+        })
+    })?;
 
     let mut references = Vec::new();
     for reference in reference_iter {
@@ -116,7 +128,10 @@ pub fn select_models(conn: &Connection) -> Result<Vec<Models>, Box<dyn std::erro
     Ok(models)
 }
 
-pub fn select_models_replicate(conn: &Connection, fipe: &str) -> Result<Vec<ModelsReplicate>, Box<dyn std::error::Error>> {
+pub fn select_models_replicate(
+    conn: &Connection,
+    fipe: &str,
+) -> Result<Vec<ModelsReplicate>, Box<dyn std::error::Error>> {
     let mut stmt = match conn.prepare(Sql::SelectModelsReplicate.get().as_str()) {
         Ok(s) => s,
 

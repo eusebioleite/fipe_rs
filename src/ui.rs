@@ -89,7 +89,6 @@ pub enum Label<'a> {
         marca: &'a str,
         modelo: &'a str,
         ano: &'a str,
-        codigo: &'a str,
     },
     PressKeyContinue,
 }
@@ -116,7 +115,10 @@ pub enum LoadMenu {
 impl<'a> fmt::Display for Label<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Label::Header { db_status, last_update } => write!(
+            Label::Header {
+                db_status,
+                last_update,
+            } => write!(
                 f,
                 "{}\n{} {}\n{} {}\n",
                 "FIPE_rs".bold().bright_cyan(),
@@ -125,7 +127,12 @@ impl<'a> fmt::Display for Label<'a> {
                 "Last Update:".bold().black().dimmed(),
                 last_update.italic().black().dimmed()
             ),
-            Label::ResponseError { message } | Label::ApiConnectionError { message } => write!(f, "{}: {}", "[ERROR]".bold().bright_red(), message.italic().black().dimmed()),
+            Label::ResponseError { message } | Label::ApiConnectionError { message } => write!(
+                f,
+                "{}: {}",
+                "[ERROR]".bold().bright_red(),
+                message.italic().black().dimmed()
+            ),
             Label::ApiBlock { code } => write!(
                 f,
                 "{}: {} {}",
@@ -136,13 +143,40 @@ impl<'a> fmt::Display for Label<'a> {
                     .black()
                     .dimmed()
             ),
-            Label::CreateTable { table_name } => write!(f, "{}: {}", "[SUCCESS]".bold().bright_green(), format!("Table {} created.", table_name.blue()).bold()),
-            Label::CreateIndexes => write!(f, "{}: {}", "[SUCCESS]".bold().bright_green(), "Created indexes.".bold()),
-            Label::LoadOk { entity } => write!(f, "  {}  {}", "[SUCCESS]".bold().bright_green(), format!(" {} successfully loaded.", entity.blue()).bold()),
+            Label::CreateTable { table_name } => write!(
+                f,
+                "{}: {}",
+                "[SUCCESS]".bold().bright_green(),
+                format!("Table {} created.", table_name.blue()).bold()
+            ),
+            Label::CreateIndexes => write!(
+                f,
+                "{}: {}",
+                "[SUCCESS]".bold().bright_green(),
+                "Created indexes.".bold()
+            ),
+            Label::LoadOk { entity } => write!(
+                f,
+                "  {}:  {}",
+                "[SUCCESS]".bold().bright_green(),
+                format!(" {} successfully loaded.", entity.blue()).bold()
+            ),
             Label::UniqueConstraint { fipe } => {
-                write!(f, "{}: {} {}", "[WARN]".bold().yellow(), fipe.italic().black().dimmed(), "Already exists.".italic().black().dimmed())
+                write!(
+                    f,
+                    "{}: {} {}",
+                    "[WARN]".bold().yellow(),
+                    fipe.italic().black().dimmed(),
+                    "Already exists.".italic().black().dimmed()
+                )
             }
-            Label::InsertReference { codigo, mes } => write!(f, "  {}  {} - {}", "[SUCCESS]".bold().bright_green(), codigo, mes),
+            Label::InsertReference { codigo, mes } => write!(
+                f,
+                "  {}:  {} - {}",
+                "[SUCCESS]".bold().bright_green(),
+                codigo,
+                mes
+            ),
             Label::TableNotExist => write!(
                 f,
                 "{}: {}",
@@ -152,26 +186,75 @@ impl<'a> fmt::Display for Label<'a> {
                     .black()
                     .dimmed()
             ),
-            Label::NoResults => write!(f, "{}: {}", "[ERROR]".bold().bright_red(), "No results.".italic().black().dimmed()),
-            Label::InsertBrand { tipo, referencia, marca, codigo } => {
-                write!(f, "{} | {} | {}: {} - {}", tipo.bold().blue(), referencia.bold().yellow(), "[SUCCESS]".bold().bright_green(), marca, codigo)
-            }
-            Label::InsertModel { tipo, referencia, marca, modelo, codigo } => {
-                write!(f, "{} | {} | {} | {}: {} - {}", tipo.bold().blue(), referencia.bold().yellow(), marca.bold().red(), "[SUCCESS]".bold().bright_green(), modelo, codigo)
-            }
-            Label::InsertYear { tipo, referencia, marca, modelo, ano, codigo } => write!(
+            Label::NoResults => write!(
                 f,
-                "   {} | {} | {} | {} | {}: {} - {}",
-                tipo.bold().blue(),
-                referencia.bold().yellow(),
-                marca.bold().red(),
-                modelo.bold().magenta(),
-                "[SUCCESS]".bold().bright_green(),
-                ano,
-                codigo
+                "{}: {}",
+                "[ERROR]".bold().bright_red(),
+                "No results.".italic().black().dimmed()
             ),
-            Label::PressKeyContinue => write!(f, "{}", "Press any key to continue...".italic().black().dimmed()),
-            Label::DbCreationOk => write!(f, "  {}  {}", "[SUCCESS]".bold().bright_green(), "Database successfully created.".italic()),
+            Label::InsertBrand {
+                tipo,
+                referencia,
+                marca,
+                codigo,
+            } => {
+                write!(
+                    f,
+                    "{}:  {} | {} | {} - {}",
+                    "[SUCCESS]".bold().bright_green(),
+                    tipo.bold().blue(),
+                    referencia.bold().yellow(),
+                    marca,
+                    codigo
+                )
+            }
+            Label::InsertModel {
+                tipo,
+                referencia,
+                marca,
+                modelo,
+                codigo,
+            } => {
+                write!(
+                    f,
+                    "   {}:  {} | {} | {} | {} - {}",
+                    "[SUCCESS]".bold().bright_green(),
+                    tipo.bold().blue(),
+                    referencia.bold().yellow(),
+                    marca.bold().red(),
+                    modelo,
+                    codigo
+                )
+            }
+            Label::InsertYear {
+                tipo,
+                referencia,
+                marca,
+                modelo,
+                ano,
+            } => {
+                write!(
+                    f,
+                    "   {}:  {} | {} | {} | {} | {}",
+                    "[SUCCESS]".bold().bright_green(),
+                    tipo.bold().blue(),
+                    referencia.bold().yellow(),
+                    marca.bold().red(),
+                    modelo.bold().magenta(),
+                    ano
+                )
+            }
+            Label::PressKeyContinue => write!(
+                f,
+                "{}",
+                "Press any key to continue...".italic().black().dimmed()
+            ),
+            Label::DbCreationOk => write!(
+                f,
+                "  {}:  {}",
+                "[SUCCESS]".bold().bright_green(),
+                "Database successfully created.".italic()
+            ),
         }
     }
 }
@@ -217,7 +300,8 @@ impl fmt::Display for MaintMenu {
 impl Sql {
     pub fn get(&self) -> String {
         match self {
-            Sql::DropTables => r#"
+            Sql::DropTables =>
+                r#"
                 DROP TABLE IF EXISTS config;
                 DROP TABLE IF EXISTS years;
                 DROP TABLE IF EXISTS models;
@@ -225,13 +309,14 @@ impl Sql {
                 DROP TABLE IF EXISTS "references";
                 DROP TABLE IF EXISTS fuels;
                 DROP TABLE IF EXISTS types;
-            "#
-            .to_string(),
+            "#.to_string(),
 
-            Sql::CreateYears => r#"
+            Sql::CreateYears =>
+                r#"
                 CREATE TABLE years(
                     id integer PRIMARY KEY,
                     description text,
+                    value date,
                     fipe text,
                     model_id integer,
                     fuel_id integer,
@@ -239,10 +324,10 @@ impl Sql {
                     foreign key(fuel_id) references fuels(id),
                     unique(fipe, model_id)
                 )
-            "#
-            .to_string(),
+            "#.to_string(),
 
-            Sql::CreateModels => r#"
+            Sql::CreateModels =>
+                r#"
                 DROP TABLE IF EXISTS models;
                 CREATE TABLE models(
                     id integer PRIMARY KEY,
@@ -252,10 +337,10 @@ impl Sql {
                     foreign key(brand_id) references brands(id),
                     unique(fipe, brand_id)
                 )
-            "#
-            .to_string(),
+            "#.to_string(),
 
-            Sql::CreateBrands => r#"
+            Sql::CreateBrands =>
+                r#"
                 CREATE TABLE brands(
                     id integer PRIMARY KEY,
                     description text,
@@ -266,39 +351,41 @@ impl Sql {
                     foreign key(ref_id) references "references"(id),
                     unique(fipe, ref_id)
                 )
-            "#
-            .to_string(),
+            "#.to_string(),
 
-            Sql::CreateReferences => r#"
+            Sql::CreateReferences =>
+                r#"
                 CREATE TABLE "references"(
                     id integer PRIMARY KEY,
+                    description text,
                     ref_date date,
                     fipe text unique
                 )
-            "#
-            .to_string(),
+            "#.to_string(),
 
-            Sql::CreateTypes => r#"
+            Sql::CreateTypes =>
+                r#"
                 CREATE TABLE types(
                     id integer PRIMARY KEY,
                     description text
                 )
-            "#
-            .to_string(),
+            "#.to_string(),
 
-            Sql::CreateFuels => r#"
+            Sql::CreateFuels =>
+                r#"
                 CREATE TABLE fuels(
                     id integer PRIMARY KEY,
                     description text
                 )
-            "#
-            .to_string(),
+            "#.to_string(),
 
             Sql::InitTypes => "INSERT INTO types(description) VALUES (?1), (?2), (?3)".to_string(),
 
-            Sql::InitFuels => "INSERT INTO fuels(description) VALUES (?1), (?2), (?3), (?4), (?5), (?6), (?7), (?8)".to_string(),
+            Sql::InitFuels =>
+                "INSERT INTO fuels(description) VALUES (?1), (?2), (?3), (?4), (?5), (?6), (?7), (?8)".to_string(),
 
-            Sql::CreateIndexes => r#"
+            Sql::CreateIndexes =>
+                r#"
                 CREATE INDEX idx_references_id ON "references" (id);
                 CREATE INDEX idx_types_id ON types (id);
                 CREATE INDEX idx_fuels_id ON fuels (id);
@@ -309,16 +396,16 @@ impl Sql {
                 CREATE INDEX idx_models_id ON models (id);
                 CREATE INDEX idx_years_model_id ON years (model_id);
                 CREATE INDEX idx_years_fuel_id ON years (fuel_id);
-            "#
-            .to_string(),
+            "#.to_string(),
 
-            Sql::CreateConfig => r#"
+            Sql::CreateConfig =>
+                r#"
                 CREATE TABLE config(
                     db_status text,
                     last_update date,
-                    brands_rowcount integer default 0,
-                    models_rowcount integer default 0,
-                    years_rowcount integer default 0,
+                    brands_rowcount integer default 51500,
+                    models_rowcount integer default 1970128,
+                    years_rowcount integer default 8119581,
                     vehicles_rowcount integer default 0
                 );
 
@@ -330,15 +417,15 @@ impl Sql {
                 BEGIN
                     SELECT RAISE(ABORT, 'config can only have a single row.');
                 END;
-            "#
-            .to_string(),
+            "#.to_string(),
 
             Sql::SelectTypes => "SELECT id, description FROM types".to_string(),
 
-            Sql::SelectReferences => r#"
+            Sql::SelectReferences =>
+                r#"
                 SELECT
                     id,
-                    ref_date,
+                    description,
                     fipe
                 FROM "references" r
                 WHERE NOT EXISTS (
@@ -346,16 +433,16 @@ impl Sql {
                     FROM brands b
                     WHERE b.ref_id = r.id
                 )
-                "#
-            .to_string(),
+                "#.to_string(),
 
-            Sql::SelectBrands => r#"
+            Sql::SelectBrands =>
+                r#"
                 SELECT
                     b.id AS id,
                     b.description,
                     b.fipe,
                     r.fipe ref_id,
-                    r."month" || '/' || r."year" ref_description,
+                    r.description ref_description,
                     b.type_id,
                     t.description type_description
                 FROM brands b
@@ -366,10 +453,10 @@ impl Sql {
                     FROM models m
                     WHERE m.brand_id = b.id
                 )
-            "#
-            .to_string(),
+            "#.to_string(),
 
-            Sql::SelectModels => r#"
+            Sql::SelectModels =>
+                r#"
                 SELECT
                     m.id,
                     m.description,
@@ -377,7 +464,7 @@ impl Sql {
                     b.fipe brand_id,
                     b.description brand_description,
                     MAX(r.fipe) AS ref_id,
-                    r."month" || '/' || r."year" ref_description,
+                    r.description ref_description,
                     b.type_id type_id,
                     t.description type_description
                 FROM
@@ -399,14 +486,14 @@ impl Sql {
                 )
                 GROUP BY
                     m.fipe
-            "#
-            .to_string(),
+            "#.to_string(),
 
-            Sql::SelectModelsReplicate => r#"
+            Sql::SelectModelsReplicate =>
+                r#"
                 SELECT
                 m.id,
                 m.description,
-                r."month" || '/' || r."year" ref_description
+                r.description ref_description
                 FROM models m
                 left join brands b on m.brand_id = b.id
                 left join "references" r ON b.ref_id = r.id
@@ -416,30 +503,34 @@ impl Sql {
                     FROM years y
                     WHERE m.id = y.model_id
                 )
-            "#
-            .to_string(),
+            "#.to_string(),
 
             Sql::SelectStatus => "SELECT db_status, last_update FROM config".to_string(),
 
             Sql::SelectCount { entity } => format!("SELECT count(id) FROM {}", entity),
 
-            Sql::SelectRowCount => "SELECT
+            Sql::SelectRowCount =>
+                "SELECT
                 brands_rowcount,
                 models_rowcount,
                 years_rowcount,
                 vehicles_rowcount
-            FROM config"
-                .to_string(),
+            FROM config".to_string(),
 
-            Sql::InsertReference => "INSERT INTO \"references\" (ref_date, fipe) VALUES (?1, ?2)".to_string(),
+            Sql::InsertReference =>
+                "INSERT INTO \"references\" (description, ref_date, fipe) VALUES (?1, ?2, ?3)".to_string(),
 
-            Sql::InsertBrand => "INSERT INTO brands (description, fipe, type_id, ref_id) VALUES (?1, ?2, ?3, ?4)".to_string(),
+            Sql::InsertBrand =>
+                "INSERT INTO brands (description, fipe, type_id, ref_id) VALUES (?1, ?2, ?3, ?4)".to_string(),
 
-            Sql::InsertModel => "INSERT INTO models (description, fipe, brand_id) VALUES (?1, ?2, ?3)".to_string(),
+            Sql::InsertModel =>
+                "INSERT INTO models (description, fipe, brand_id) VALUES (?1, ?2, ?3)".to_string(),
 
-            Sql::InsertYear => "INSERT INTO years (description, value, fipe, model_id, fuel_id) VALUES (?1, ?2, ?3, ?4, ?5)".to_string(),
+            Sql::InsertYear =>
+                "INSERT INTO years (description, value, fipe, model_id, fuel_id) VALUES (?1, ?2, ?3, ?4, ?5)".to_string(),
 
-            Sql::UpdateStatus => "UPDATE config SET db_status = ?1, last_update = datetime('now', 'localtime')".to_string(),
+            Sql::UpdateStatus =>
+                "UPDATE config SET db_status = ?1, last_update = datetime('now', 'localtime')".to_string(),
 
             Sql::UpdateRowCount { entity } => format!("UPDATE config SET {}_rowcount = ?1", entity),
         }

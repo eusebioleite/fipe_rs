@@ -11,6 +11,7 @@ pub struct Types {
 #[derive(Debug, Deserialize)]
 pub struct References {
     pub id: i32,
+    pub description: String,
     pub ref_date: String,
     pub fipe: String,
 }
