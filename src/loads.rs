@@ -7,7 +7,8 @@ use crate::selects::{
     select_references,
     select_types,
 };
-use crate::ui::{ Label, Sql };
+use crate::label::{ Label };
+use crate::sql::{ Sql };
 use crate::utils::{ throttle, parse_date, progress_bar };
 use chrono::{ Datelike, Utc };
 use indicatif::{ ProgressBar, ProgressStyle };

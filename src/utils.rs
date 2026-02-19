@@ -1,4 +1,4 @@
-use crate::ui::{ Label };
+use crate::label::{ Label };
 
 use indicatif::{ ProgressBar, ProgressStyle };
 use rand::{ Rng };

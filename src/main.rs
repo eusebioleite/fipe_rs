@@ -1,18 +1,22 @@
-mod ui;
 mod schema;
 mod loads;
 mod selects;
 mod utils;
 mod config;
+mod sql;
+mod label;
+mod menu;
 
 use loads::{ load_brands, load_models, load_references, load_years };
-use ui::{ Label, MainMenu, MaintMenu, LoadMenu };
+use label::{ Label };
+use menu::{ MainMenu, MaintMenu, LoadMenu };
 use utils::{ clear_screen, press_key_continue };
 use config::{ setup_db, update_status, select_status };
 use rusqlite::{ Connection, Result };
 use owo_colors::OwoColorize;
 use inquire::Select;
 use inquire::ui::{ RenderConfig, Styled, Color };
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = Connection::open("fipe_rs.db")?;

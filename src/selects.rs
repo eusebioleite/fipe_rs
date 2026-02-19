@@ -1,5 +1,6 @@
+use crate::label::Label;
 use crate::schema::{Brands, Models, ModelsReplicate, References, Types};
-use crate::ui::{Label, Sql};
+use crate::sql::Sql;
 use rusqlite::{Connection, Result};
 pub fn select_types(conn: &Connection) -> Result<Vec<Types>, Box<dyn std::error::Error>> {
     let mut stmt = match conn.prepare(Sql::SelectTypes.get().as_str()) {

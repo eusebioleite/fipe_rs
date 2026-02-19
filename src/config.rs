@@ -1,5 +1,6 @@
+use crate::label::Label;
 use crate::schema::{Count, RowCount, Status};
-use crate::ui::{Label, Sql};
+use crate::sql::Sql;
 use crate::utils::progress_bar;
 
 use rusqlite::{params, Connection, Name, Result};
@@ -10,21 +11,44 @@ pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::er
         conn.execute_batch(Sql::DropTables.get().as_str())?;
         pb.inc(1);
         // Config
-        pb.set_message((Label::CreateTable { table_name: "config" }).to_string());
+        pb.set_message(
+            (Label::CreateTable {
+                table_name: "config",
+            })
+            .to_string(),
+        );
         conn.execute_batch(Sql::CreateConfig.get().as_str())?;
         pb.inc(1);
         // References
-        pb.set_message((Label::CreateTable { table_name: "references" }).to_string());
+        pb.set_message(
+            (Label::CreateTable {
+                table_name: "references",
+            })
+            .to_string(),
+        );
         conn.execute_batch(Sql::CreateReferences.get().as_str())?;
         pb.inc(1);
         // Types
-        pb.set_message((Label::CreateTable { table_name: "types" }).to_string());
+        pb.set_message(
+            (Label::CreateTable {
+                table_name: "types",
+            })
+            .to_string(),
+        );
         conn.execute_batch(Sql::CreateTypes.get().as_str())?;
         pb.inc(1);
-        conn.execute(Sql::InitTypes.get().as_str(), ["Carros", "Motos", "Caminhões e Micro-Ônibus"])?;
+        conn.execute(
+            Sql::InitTypes.get().as_str(),
+            ["Carros", "Motos", "Caminhões e Micro-Ônibus"],
+        )?;
         pb.inc(1);
         // Fuels
-        pb.set_message((Label::CreateTable { table_name: "fuels" }).to_string());
+        pb.set_message(
+            (Label::CreateTable {
+                table_name: "fuels",
+            })
+            .to_string(),
+        );
         conn.execute_batch(Sql::CreateFuels.get().as_str())?;
         pb.inc(1);
         conn.execute(
@@ -44,13 +68,28 @@ pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::er
         // Brands
         conn.execute_batch(Sql::CreateBrands.get().as_str())?;
         pb.inc(1);
-        pb.set_message((Label::CreateTable { table_name: "brands" }).to_string());
+        pb.set_message(
+            (Label::CreateTable {
+                table_name: "brands",
+            })
+            .to_string(),
+        );
         // Models
-        pb.set_message((Label::CreateTable { table_name: "models" }).to_string());
+        pb.set_message(
+            (Label::CreateTable {
+                table_name: "models",
+            })
+            .to_string(),
+        );
         conn.execute_batch(Sql::CreateModels.get().as_str())?;
         pb.inc(1);
         // Years
-        pb.set_message((Label::CreateTable { table_name: "years" }).to_string());
+        pb.set_message(
+            (Label::CreateTable {
+                table_name: "years",
+            })
+            .to_string(),
+        );
         conn.execute_batch(Sql::CreateYears.get().as_str())?;
         pb.inc(1);
         // Indexes
@@ -70,11 +109,19 @@ pub fn select_status(conn: &Connection) -> Result<Status, Box<dyn std::error::Er
         Ok(s) => s,
         _ => {
             conn.execute_batch(&Sql::CreateConfig.get().as_str())?;
-            return Ok(Status { db_status: "empty".to_string(), last_update: None });
+            return Ok(Status {
+                db_status: "empty".to_string(),
+                last_update: None,
+            });
         }
     };
 
-    let mut config_iter = stmt.query_map([], |row| Ok(Status { db_status: row.get("db_status")?, last_update: row.get("last_update")? }))?;
+    let mut config_iter = stmt.query_map([], |row| {
+        Ok(Status {
+            db_status: row.get("db_status")?,
+            last_update: row.get("last_update")?,
+        })
+    })?;
 
     if let Some(config) = config_iter.next() {
         match config {
@@ -82,7 +129,10 @@ pub fn select_status(conn: &Connection) -> Result<Status, Box<dyn std::error::Er
             Err(e) => Err(Box::new(e)),
         }
     } else {
-        Ok(Status { db_status: "empty".to_string(), last_update: None })
+        Ok(Status {
+            db_status: "empty".to_string(),
+            last_update: None,
+        })
     }
 }
 
@@ -98,7 +148,12 @@ pub fn select_rowcount(conn: &Connection) -> Result<RowCount, Box<dyn std::error
         Ok(s) => s,
         _ => {
             conn.execute_batch(&create_config)?;
-            return Ok(RowCount { brands_rowcount: 0, models_rowcount: 0, years_rowcount: 0, vehicles_rowcount: 0 });
+            return Ok(RowCount {
+                brands_rowcount: 0,
+                models_rowcount: 0,
+                years_rowcount: 0,
+                vehicles_rowcount: 0,
+            });
         }
     };
 
@@ -114,12 +169,20 @@ pub fn select_rowcount(conn: &Connection) -> Result<RowCount, Box<dyn std::error
     if let Some(config) = config_iter.next() {
         Ok(config?)
     } else {
-        Ok(RowCount { brands_rowcount: 0, models_rowcount: 0, years_rowcount: 0, vehicles_rowcount: 0 })
+        Ok(RowCount {
+            brands_rowcount: 0,
+            models_rowcount: 0,
+            years_rowcount: 0,
+            vehicles_rowcount: 0,
+        })
     }
 }
 
 pub fn select_count(conn: &Connection, entity: &str) -> Result<Count, Box<dyn std::error::Error>> {
-    let select_count = (Sql::SelectCount { entity: entity.to_string() }).get();
+    let select_count = (Sql::SelectCount {
+        entity: entity.to_string(),
+    })
+    .get();
     let mut stmt = match conn.prepare(&select_count) {
         Ok(s) => s,
         _ => {
@@ -152,7 +215,10 @@ pub fn update_rowcount(conn: &Connection) -> Result<(), Box<dyn std::error::Erro
         let db_count = select_count(conn, name)?.count;
 
         if db_count > current {
-            let update_row_count = (Sql::UpdateRowCount { entity: name.to_string() }).get();
+            let update_row_count = (Sql::UpdateRowCount {
+                entity: name.to_string(),
+            })
+            .get();
             conn.execute(&update_row_count, params![db_count])?;
         }
     }
