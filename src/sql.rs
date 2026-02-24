@@ -14,6 +14,7 @@ pub enum Sql {
 
     // selects
     SelectTypes,
+    SelectAllReferences,
     SelectReferences,
     SelectBrands,
     SelectModels,
@@ -91,7 +92,6 @@ impl Sql {
                 r#"
               CREATE TABLE "references"(
                   id integer PRIMARY KEY,
-                  description text,
                   ref_date date,
                   fipe text unique
               )
@@ -154,12 +154,19 @@ impl Sql {
           "#.to_string(),
 
             Sql::SelectTypes => "SELECT id, description FROM types".to_string(),
-
+            Sql::SelectAllReferences =>
+                r#"
+              SELECT
+                  id,
+                  ref_date,
+                  fipe
+              FROM "references"
+              "#.to_string(),
             Sql::SelectReferences =>
                 r#"
               SELECT
                   id,
-                  description,
+                  ref_date,
                   fipe
               FROM "references" r
               WHERE NOT EXISTS (
@@ -173,11 +180,24 @@ impl Sql {
                 r#"
               SELECT
                   b.id AS id,
-                  b.description,
-                  b.fipe,
-                  r.fipe ref_id,
-                  r.description ref_description,
-                  b.type_id,
+                  b.description AS description,
+                  b.fipe AS fipe,
+                  r.id AS ref_id,
+                  CASE strftime('%m', r.ref_date)
+                    WHEN '01' THEN 'janeiro'
+                    WHEN '02' THEN 'fevereiro'
+                    WHEN '03' THEN 'março'
+                    WHEN '04' THEN 'abril'
+                    WHEN '05' THEN 'maio'
+                    WHEN '06' THEN 'junho'
+                    WHEN '07' THEN 'julho'
+                    WHEN '08' THEN 'agosto'
+                    WHEN '09' THEN 'setembro'
+                    WHEN '10' THEN 'outubro'
+                    WHEN '11' THEN 'novembro'
+                    WHEN '12' THEN 'dezembro'
+                  END || '/' || strftime('%Y', r.ref_date) AS ref_date,
+                  b.type_id AS type_id,
                   t.description type_description
               FROM brands b
               LEFT JOIN "references" r ON b.ref_id = r.id
@@ -192,15 +212,28 @@ impl Sql {
             Sql::SelectModels =>
                 r#"
               SELECT
-                  m.id,
-                  m.description,
-                  m.fipe,
-                  b.fipe brand_id,
-                  b.description brand_description,
+                  m.id AS id,
+                  m.description AS description,
+                  m.fipe AS fipe,
+                  b.fipe AS brand_id,
+                  b.description AS brand_description,
                   MAX(r.fipe) AS ref_id,
-                  r.description ref_description,
-                  b.type_id type_id,
-                  t.description type_description
+                  CASE strftime('%m', r.ref_date)
+                    WHEN '01' THEN 'janeiro'
+                    WHEN '02' THEN 'fevereiro'
+                    WHEN '03' THEN 'março'
+                    WHEN '04' THEN 'abril'
+                    WHEN '05' THEN 'maio'
+                    WHEN '06' THEN 'junho'
+                    WHEN '07' THEN 'julho'
+                    WHEN '08' THEN 'agosto'
+                    WHEN '09' THEN 'setembro'
+                    WHEN '10' THEN 'outubro'
+                    WHEN '11' THEN 'novembro'
+                    WHEN '12' THEN 'dezembro'
+                  END || '/' || strftime('%Y', r.ref_date) AS ref_date,
+                  b.type_id AS type_id,
+                  t.description AS type_description
               FROM
                   models m
               JOIN brands b ON
@@ -225,12 +258,25 @@ impl Sql {
             Sql::SelectModelsReplicate =>
                 r#"
               SELECT
-              m.id,
-              m.description,
-              r.description ref_description
+              m.id AS id,
+              m.description AS description,
+              CASE strftime('%m', r.ref_date)
+                WHEN '01' THEN 'janeiro'
+                WHEN '02' THEN 'fevereiro'
+                WHEN '03' THEN 'março'
+                WHEN '04' THEN 'abril'
+                WHEN '05' THEN 'maio'
+                WHEN '06' THEN 'junho'
+                WHEN '07' THEN 'julho'
+                WHEN '08' THEN 'agosto'
+                WHEN '09' THEN 'setembro'
+                WHEN '10' THEN 'outubro'
+                WHEN '11' THEN 'novembro'
+                WHEN '12' THEN 'dezembro'
+              END || '/' || strftime('%Y', r.ref_date) AS ref_date
               FROM models m
-              left join brands b on m.brand_id = b.id
-              left join "references" r ON b.ref_id = r.id
+              LEFT JOIN brands b on m.brand_id = b.id
+              LEFT JOIN "references" r ON b.ref_id = r.id
               WHERE m.fipe = ?1
               AND NOT EXISTS (
                   SELECT 1
@@ -252,7 +298,7 @@ impl Sql {
           FROM config".to_string(),
 
             Sql::InsertReference =>
-                "INSERT INTO \"references\" (description, ref_date, fipe) VALUES (?1, ?2, ?3)".to_string(),
+                "INSERT INTO \"references\" (ref_date, fipe) VALUES (?1, ?2)".to_string(),
 
             Sql::InsertBrand =>
                 "INSERT INTO brands (description, fipe, type_id, ref_id) VALUES (?1, ?2, ?3, ?4)".to_string(),

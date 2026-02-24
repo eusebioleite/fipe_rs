@@ -11,7 +11,6 @@ pub struct Types {
 #[derive(Debug, Deserialize)]
 pub struct References {
     pub id: i32,
-    pub description: String,
     pub ref_date: String,
     pub fipe: String,
 }
@@ -30,8 +29,8 @@ pub struct Brands {
     pub id: i32,
     pub description: String,
     pub fipe: String,
-    pub ref_id: String,
-    pub ref_description: String,
+    pub ref_id: i32,
+    pub ref_date: String,
     pub type_id: i32,
     pub type_description: String,
 }
@@ -42,7 +41,7 @@ pub struct Models {
     pub description: String,
     pub fipe: String,
     pub ref_id: String,
-    pub ref_description: String,
+    pub ref_date: String,
     pub type_id: i32,
     pub type_description: String,
     pub brand_id: String,
@@ -52,7 +51,7 @@ pub struct Models {
 pub struct ModelsReplicate {
     pub id: i32,
     pub description: String,
-    pub ref_description: String,
+    pub ref_date: String,
 }
 
 #[derive(Debug, Deserialize)]

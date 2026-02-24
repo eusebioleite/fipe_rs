@@ -30,6 +30,34 @@ pub fn select_types(conn: &Connection) -> Result<Vec<Types>, Box<dyn std::error:
 }
 
 // References
+pub fn select_all_references(
+    conn: &Connection,
+) -> Result<Vec<References>, Box<dyn std::error::Error>> {
+    let mut stmt = match conn.prepare(Sql::SelectAllReferences.get().as_str()) {
+        Ok(s) => s,
+
+        Err(rusqlite::Error::SqliteFailure(e, Some(msg))) if msg.contains("no such table") => {
+            Label::TableNotExist.log();
+            return Err(Box::new(e));
+        }
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+    let reference_iter = stmt.query_map([], |row| {
+        Ok(References {
+            id: row.get("id")?,
+            ref_date: row.get("ref_date")?,
+            fipe: row.get("fipe")?,
+        })
+    })?;
+
+    let mut references = Vec::new();
+    for reference in reference_iter {
+        references.push(reference?);
+    }
+    Ok(references)
+}
 
 pub fn select_references(conn: &Connection) -> Result<Vec<References>, Box<dyn std::error::Error>> {
     let mut stmt = match conn.prepare(Sql::SelectReferences.get().as_str()) {
@@ -46,7 +74,6 @@ pub fn select_references(conn: &Connection) -> Result<Vec<References>, Box<dyn s
     let reference_iter = stmt.query_map([], |row| {
         Ok(References {
             id: row.get("id")?,
-            description: row.get("description")?,
             ref_date: row.get("ref_date")?,
             fipe: row.get("fipe")?,
         })
@@ -76,13 +103,13 @@ pub fn select_brands(conn: &Connection) -> Result<Vec<Brands>, Box<dyn std::erro
 
     let brand_iter = stmt.query_map([], |row| {
         Ok(Brands {
-            id: row.get(0)?,
-            description: row.get(1)?,
-            fipe: row.get(2)?,
-            ref_id: row.get(3)?,
-            ref_description: row.get(4)?,
-            type_id: row.get(5)?,
-            type_description: row.get(6)?,
+            id: row.get("id")?,
+            description: row.get("description")?,
+            fipe: row.get("fipe")?,
+            ref_id: row.get("ref_id")?,
+            ref_date: row.get("ref_date")?,
+            type_id: row.get("type_id")?,
+            type_description: row.get("type_description")?,
         })
     })?;
 
@@ -114,7 +141,7 @@ pub fn select_models(conn: &Connection) -> Result<Vec<Models>, Box<dyn std::erro
             description: row.get("description")?,
             fipe: row.get("fipe")?,
             ref_id: row.get("ref_id")?,
-            ref_description: row.get("ref_description")?,
+            ref_date: row.get("ref_date")?,
             type_id: row.get("type_id")?,
             type_description: row.get("type_description")?,
             brand_id: row.get("brand_id")?,
@@ -149,7 +176,7 @@ pub fn select_models_replicate(
         Ok(ModelsReplicate {
             id: row.get("id")?,
             description: row.get("description")?,
-            ref_description: row.get("ref_description")?,
+            ref_date: row.get("ref_date")?,
         })
     })?;
 

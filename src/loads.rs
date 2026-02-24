@@ -4,18 +4,17 @@ use crate::selects::{
     select_brands,
     select_models,
     select_models_replicate,
+    select_all_references,
     select_references,
     select_types,
 };
 use crate::label::{ Label };
 use crate::sql::{ Sql };
-use crate::utils::{ throttle, parse_date, progress_bar };
-use chrono::{ Datelike, Utc };
-use indicatif::{ ProgressBar, ProgressStyle };
+use crate::utils::{ throttle, parse_date, progress_bar, parse_ref_date };
+use chrono::{ Datelike, NaiveDate, Utc };
 use reqwest::Client;
 use rusqlite::{ params, Connection, Result };
 use std::process::exit;
-use std::time::SystemTime;
 
 async fn fetch_fipe(
     client: &reqwest::Client,
@@ -63,11 +62,27 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
 
         .send().await?;
 
-    let references: Vec<ReferencesResponse> = response.json().await?;
-    let len: u64 = references.len().try_into().unwrap();
+    let references_new: Vec<ReferencesResponse> = response.json().await?;
+    let references_old = select_all_references(conn)?;
+    let len: u64 = references_new.len().try_into().unwrap();
     let pb = progress_bar(len);
 
-    for r in &references {
+    for r in &references_new {
+        if
+            let Some(old) = references_old
+                .iter()
+                .find(|old| old.fipe.trim() == r.codigo.to_string().trim())
+        {
+            let mes_ano = parse_ref_date(old);
+            pb.set_message(
+                (Label::InsertReference {
+                    codigo: &r.codigo.to_string(),
+                    mes: mes_ano.as_str(),
+                }).to_string()
+            );
+            pb.inc(1);
+            continue;
+        }
         let codigo = r.codigo.to_string();
         match
             conn.execute(Sql::InsertReference.get().as_str(), params![parse_date(&r.mes), r.codigo])
@@ -148,7 +163,7 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
             let brands: Vec<FipeStruct> = match response.json().await {
                 Ok(data) => data,
                 Err(_) => {
-                    println!("Erro de decode inesperado. Provavelmente HTML de erro. Pulando...");
+                    println!("Decode error. Skipping...");
                     continue;
                 }
             };
@@ -160,10 +175,11 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                     )
                 {
                     Ok(_) => {
+                        let mes_ano = parse_ref_date(&r);
                         pb.set_message(
                             (Label::InsertBrand {
                                 tipo: &t.description,
-                                referencia: &r.ref_date,
+                                referencia: mes_ano.as_str(),
                                 marca: &b.label,
                                 codigo: &b.value,
                             }).to_string()
@@ -204,8 +220,9 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
 
     let brands = match select_brands(conn) {
         Ok(vb) => vb,
-        Err(_e) => {
-            return Ok(());
+        Err(e) => {
+            // ISSO VAI QUEBRAR E MOSTRAR O ERRO REAL
+            panic!("SQLITE_PREPARE_ERROR: {:?}", e);
         }
     };
     if brands.len() == 0 {
@@ -229,7 +246,7 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
         let models: ModelsResponse = match response.json().await {
             Ok(data) => data,
             Err(_) => {
-                println!("Erro de decode inesperado. Provavelmente HTML de erro. Pulando...");
+                println!("Decode error. Skipping...");
                 continue;
             }
         };
@@ -240,7 +257,7 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                     pb.set_message(
                         (Label::InsertModel {
                             tipo: &b.type_description,
-                            referencia: &b.ref_description,
+                            referencia: &b.ref_date,
                             marca: &b.description,
                             modelo: &m.label,
                             codigo: &m.value.to_string(),
@@ -306,7 +323,7 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
         let years: Vec<FipeStruct> = match response.json().await {
             Ok(data) => data,
             Err(_) => {
-                println!("Erro de decode inesperado. Provavelmente HTML de erro. Pulando...");
+                println!("Decode error. Skipping...");
                 continue;
             }
         };
@@ -333,7 +350,7 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
                         pb.set_message(
                             (Label::InsertYear {
                                 tipo: &m.type_description,
-                                referencia: &mr.ref_description,
+                                referencia: &mr.ref_date,
                                 marca: &m.brand_description,
                                 modelo: &mr.description,
                                 ano: &y.label,

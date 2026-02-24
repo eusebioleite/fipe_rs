@@ -1,5 +1,6 @@
 use crate::label::{ Label };
-
+use crate::schema::{ References };
+use chrono::{ Datelike, NaiveDate };
 use indicatif::{ ProgressBar, ProgressStyle };
 use rand::{ Rng };
 use std::io::{ Write };
@@ -56,4 +57,27 @@ pub fn progress_bar(len: u64) -> ProgressBar {
             .progress_chars("#>-")
     );
     pb
+}
+
+pub fn parse_ref_date(reference: &References) -> String {
+    let date = NaiveDate::parse_from_str(&reference.ref_date, "%Y-%m-%d").unwrap_or_else(|_|
+        NaiveDate::from_ymd_opt(1900, 1, 1).unwrap()
+    );
+    let mes = match date.month() {
+        1 => "janeiro",
+        2 => "fevereiro",
+        3 => "março",
+        4 => "abril",
+        5 => "maio",
+        6 => "junho",
+        7 => "julho",
+        8 => "agosto",
+        9 => "setembro",
+        10 => "outubro",
+        11 => "novembro",
+        12 => "dezembro",
+        _ => unreachable!(),
+    };
+    let mes_ano = format!("{}/{}", mes, date.year());
+    mes_ano
 }
