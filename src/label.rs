@@ -15,6 +15,7 @@ pub enum Label<'a> {
     },
     CreateIndexes,
     // requests
+    ClientFail,
     ResponseError {
         message: &'a str,
     },
@@ -73,6 +74,12 @@ impl<'a> fmt::Display for Label<'a> {
                 db_status.bold(),
                 "Last Update:".bold().black().dimmed(),
                 last_update.italic().black().dimmed()
+            ),
+            Label::ClientFail => write!(
+                f,
+                "{}: {}",
+                "[ERROR]".bold().bright_red(),
+                "Failed to create HTTP client.".italic().black().dimmed()
             ),
             Label::ResponseError { message } | Label::ApiConnectionError { message } => write!(
                 f,
@@ -137,7 +144,10 @@ impl<'a> fmt::Display for Label<'a> {
                 f,
                 "{}: {}",
                 "[ERROR]".bold().bright_red(),
-                "No results.".italic().black().dimmed()
+                "No type or references in database."
+                    .italic()
+                    .black()
+                    .dimmed()
             ),
             Label::InsertBrand {
                 tipo,

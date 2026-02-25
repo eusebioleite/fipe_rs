@@ -10,27 +10,33 @@ use crate::selects::{
 };
 use crate::label::{ Label };
 use crate::sql::{ Sql };
-use crate::utils::{ throttle, parse_date, progress_bar, parse_ref_date };
-use chrono::{ Datelike, NaiveDate, Utc };
+use crate::utils::{ throttle, parse_date, progress_bar, parse_ref_date, get_random_user_agent };
+use chrono::{ Datelike, Utc };
 use reqwest::Client;
 use rusqlite::{ params, Connection, Result };
 use std::process::exit;
+use std::sync::OnceLock;
 
-async fn fetch_fipe(
-    client: &reqwest::Client,
-    url: &str,
-    body: &serde_json::Value
-) -> Option<reqwest::Response> {
+static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+
+fn get_client() -> &'static Client {
+    HTTP_CLIENT.get_or_init(|| {
+        Client::builder()
+            .tcp_keepalive(std::time::Duration::from_secs(60))
+            .build()
+            .expect(Label::ClientFail.to_string().as_str())
+    })
+}
+
+async fn fetch_fipe(url: &str, body: &serde_json::Value) -> Option<reqwest::Response> {
+    let client = get_client();
     loop {
         match
             client
                 .post(url)
                 .header("Referer", "http://veiculos.fipe.org.br/")
                 .header("Content-Type", "application/json")
-                .header(
-                    "User-Agent",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                )
+                .header("User-Agent", get_random_user_agent())
                 .json(body)
                 .send().await
         {
@@ -66,7 +72,7 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
     let references_old = select_all_references(conn)?;
     let len: u64 = references_new.len().try_into().unwrap();
     let pb = progress_bar(len);
-
+    let mut stmt = conn.prepare(Sql::InsertReference.get().as_str())?;
     for r in &references_new {
         if
             let Some(old) = references_old
@@ -84,9 +90,7 @@ pub async fn load_references(conn: &Connection) -> Result<(), Box<dyn std::error
             continue;
         }
         let codigo = r.codigo.to_string();
-        match
-            conn.execute(Sql::InsertReference.get().as_str(), params![parse_date(&r.mes), r.codigo])
-        {
+        match stmt.execute(params![parse_date(&r.mes), r.codigo]) {
             Ok(_) => {
                 pb.set_message(
                     (Label::InsertReference {
@@ -126,17 +130,15 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
 
     let types = match select_types(conn) {
         Ok(vt) => vt,
-        Err(_) => {
-            Label::TableNotExist.log();
-            return Ok(());
+        Err(e) => {
+            panic!("SQLITE_PREPARE_ERROR: {:?}", e);
         }
     };
 
     let references = match select_references(conn) {
         Ok(vr) => vr,
-        Err(_) => {
-            Label::TableNotExist.log();
-            return Ok(());
+        Err(e) => {
+            panic!("SQLITE_PREPARE_ERROR: {:?}", e);
         }
     };
 
@@ -146,10 +148,7 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
     }
 
     let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarMarcas";
-    let client = reqwest::Client
-        ::builder()
-        .tcp_keepalive(std::time::Duration::from_secs(60))
-        .build()?;
+    let mut stmt = conn.prepare(Sql::InsertBrand.get().as_str())?;
     for t in &types {
         for r in &references {
             let body =
@@ -158,7 +157,7 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                 "codigoTabelaReferencia": &r.fipe
             });
 
-            let response = fetch_fipe(&client, url, &body).await.unwrap();
+            let response = fetch_fipe(url, &body).await.unwrap();
 
             let brands: Vec<FipeStruct> = match response.json().await {
                 Ok(data) => data,
@@ -168,12 +167,7 @@ pub async fn load_brands(conn: &Connection) -> Result<(), Box<dyn std::error::Er
                 }
             };
             for b in brands {
-                match
-                    conn.execute(
-                        Sql::InsertBrand.get().as_str(),
-                        params![b.label, b.value, t.id, r.id]
-                    )
-                {
+                match stmt.execute(params![b.label, b.value, t.id, r.id]) {
                     Ok(_) => {
                         let mes_ano = parse_ref_date(&r);
                         pb.set_message(
@@ -221,7 +215,6 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
     let brands = match select_brands(conn) {
         Ok(vb) => vb,
         Err(e) => {
-            // ISSO VAI QUEBRAR E MOSTRAR O ERRO REAL
             panic!("SQLITE_PREPARE_ERROR: {:?}", e);
         }
     };
@@ -230,10 +223,7 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
         return Ok(());
     }
     let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarModelos";
-    let client: Client = reqwest::Client
-        ::builder()
-        .tcp_keepalive(std::time::Duration::from_secs(60))
-        .build()?;
+    let mut stmt = conn.prepare(Sql::InsertModel.get().as_str())?;
     for b in &brands {
         let body =
             serde_json::json!({
@@ -241,7 +231,7 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
             "codigoTabelaReferencia": b.ref_id,
             "codigoMarca": b.fipe
         });
-        let response = fetch_fipe(&client, &url, &body).await.unwrap();
+        let response = fetch_fipe(&url, &body).await.unwrap();
 
         let models: ModelsResponse = match response.json().await {
             Ok(data) => data,
@@ -251,7 +241,7 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
             }
         };
         for m in models.model {
-            match conn.execute(Sql::InsertModel.get().as_str(), params![m.label, m.value, b.id]) {
+            match stmt.execute(params![m.label, m.value, b.id]) {
                 Ok(_) => {
                     pb.inc(1);
                     pb.set_message(
@@ -297,8 +287,8 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
 
     let models = match select_models(conn) {
         Ok(vm) => vm,
-        Err(_e) => {
-            return Ok(());
+        Err(e) => {
+            panic!("SQLITE_PREPARE_ERROR: {:?}", e);
         }
     };
     if models.len() == 0 {
@@ -306,10 +296,7 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
         return Ok(());
     }
     let url = "https://veiculos.fipe.org.br/api/veiculos/ConsultarAnoModelo";
-    let client = reqwest::Client
-        ::builder()
-        .tcp_keepalive(std::time::Duration::from_secs(60))
-        .build()?;
+    let mut stmt = conn.prepare(Sql::InsertYear.get().as_str())?;
     for m in &models {
         let body =
             serde_json::json!({
@@ -318,7 +305,7 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
             "codigoMarca": &m.brand_id,
             "codigoModelo": &m.fipe
         });
-        let response = fetch_fipe(&client, &url, &body).await.unwrap();
+        let response = fetch_fipe(&url, &body).await.unwrap();
 
         let years: Vec<FipeStruct> = match response.json().await {
             Ok(data) => data,
@@ -339,12 +326,7 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
             let value = format!("{}-01-01", year_str);
             let fuel_id = parts.get(1);
             for mr in &models_replica {
-                match
-                    conn.execute(
-                        Sql::InsertYear.get().as_str(),
-                        params![y.label, value, y.value, mr.id, fuel_id]
-                    )
-                {
+                match stmt.execute(params![y.label, value, y.value, mr.id, fuel_id]) {
                     Ok(_) => {
                         pb.inc(1);
                         pb.set_message(

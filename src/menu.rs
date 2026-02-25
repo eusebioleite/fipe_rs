@@ -1,4 +1,3 @@
-use inquire::Select;
 use std::fmt;
 
 pub enum MainMenu {

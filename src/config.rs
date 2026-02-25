@@ -1,9 +1,9 @@
 use crate::label::Label;
-use crate::schema::{Count, RowCount, Status};
+use crate::schema::{RowCount, Status};
 use crate::sql::Sql;
 use crate::utils::progress_bar;
 
-use rusqlite::{params, Connection, Name, Result};
+use rusqlite::{params, Connection, Result};
 pub fn setup_db(conn: &Connection, recreate: bool) -> Result<(), Box<dyn std::error::Error>> {
     if recreate {
         let pb = progress_bar(11);
@@ -177,7 +177,7 @@ pub fn select_rowcount(conn: &Connection) -> Result<RowCount, Box<dyn std::error
         })
     }
 }
-
+/*
 pub fn select_count(conn: &Connection, entity: &str) -> Result<Count, Box<dyn std::error::Error>> {
     let select_count = (Sql::SelectCount {
         entity: entity.to_string(),
@@ -201,6 +201,7 @@ pub fn select_count(conn: &Connection, entity: &str) -> Result<Count, Box<dyn st
         Ok(Count { count: 0 })
     }
 }
+
 pub fn update_rowcount(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let row_count = select_rowcount(conn)?;
 
@@ -225,3 +226,4 @@ pub fn update_rowcount(conn: &Connection) -> Result<(), Box<dyn std::error::Erro
 
     Ok(())
 }
+*/
