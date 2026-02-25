@@ -11,7 +11,7 @@ use loads::{ load_brands, load_models, load_references, load_years };
 use label::{ Label };
 use menu::{ MainMenu, MaintMenu, LoadMenu };
 use utils::{ clear_screen, press_key_continue };
-use config::{ setup_db, update_status, select_status };
+use config::{ setup_db, check_db, update_status, select_status };
 use rusqlite::{ Connection, Result };
 use owo_colors::OwoColorize;
 use inquire::Select;
@@ -26,8 +26,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let config = select_status(&conn)?;
         let db_status = match config.db_status.as_str() {
-            "empty" => "Empty".italic().to_string(),
-            "stable" => "Stable".bright_green().to_string(),
+            "empty" => "Empty".italic().bright_yellow().to_string(),
+            "updated" => "Updated".bright_green().to_string(),
             _ => "Outdated".bright_red().blink_fast().to_string(),
         };
         let last_update = config.last_update.unwrap_or_else(|| "Never".to_string());
@@ -89,10 +89,10 @@ async fn run_maint(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> 
 
         match ans {
             MaintMenu::RecreateDatabase => {
-                setup_db(conn, true)?;
-                update_status(conn, "stable")?;
+                setup_db(conn)?;
+                update_status(conn, "empty")?;
             }
-            MaintMenu::CheckUpdates => println!("(Em implementação...)"),
+            MaintMenu::CheckUpdates => check_db(conn)?,
             MaintMenu::Back => {
                 break;
             }

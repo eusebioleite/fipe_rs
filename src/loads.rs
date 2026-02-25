@@ -10,8 +10,14 @@ use crate::selects::{
 };
 use crate::label::{ Label };
 use crate::sql::{ Sql };
-use crate::utils::{ throttle, parse_date, progress_bar, parse_ref_date, get_random_user_agent };
-use chrono::{ Datelike, Utc };
+use crate::utils::{
+    throttle,
+    parse_date,
+    progress_bar,
+    parse_ref_date,
+    get_random_user_agent,
+    parse_year,
+};
 use reqwest::Client;
 use rusqlite::{ params, Connection, Result };
 use std::process::exit;
@@ -215,7 +221,7 @@ pub async fn load_models(conn: &Connection) -> Result<(), Box<dyn std::error::Er
     let brands = match select_brands(conn) {
         Ok(vb) => vb,
         Err(e) => {
-            panic!("SQLITE_PREPARE_ERROR: {:?}", e);
+            panic!("{:?}", e);
         }
     };
     if brands.len() == 0 {
@@ -288,7 +294,7 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
     let models = match select_models(conn) {
         Ok(vm) => vm,
         Err(e) => {
-            panic!("SQLITE_PREPARE_ERROR: {:?}", e);
+            panic!("{:?}", e);
         }
     };
     if models.len() == 0 {
@@ -317,16 +323,9 @@ pub async fn load_years(conn: &Connection) -> Result<(), Box<dyn std::error::Err
 
         let models_replica = select_models_replicate(conn, &m.fipe)?;
         for y in years {
-            let parts: Vec<&str> = y.value.split('-').collect();
-            let year_str = if parts[0].trim() == "32000" {
-                Utc::now().year().to_string()
-            } else {
-                parts[0].trim().to_string()
-            };
-            let value = format!("{}-01-01", year_str);
-            let fuel_id = parts.get(1);
+            let (year_date, fuel_id) = parse_year(&y.value);
             for mr in &models_replica {
-                match stmt.execute(params![y.label, value, y.value, mr.id, fuel_id]) {
+                match stmt.execute(params![y.label, year_date, y.value, mr.id, fuel_id]) {
                     Ok(_) => {
                         pb.inc(1);
                         pb.set_message(

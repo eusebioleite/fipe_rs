@@ -1,6 +1,6 @@
 use crate::label::{ Label };
 use crate::schema::{ References };
-use chrono::{ Datelike, NaiveDate };
+use chrono::{ Datelike, NaiveDate, Utc };
 use indicatif::{ ProgressBar, ProgressStyle };
 use rand::{ Rng };
 use std::io::{ Write };
@@ -94,4 +94,17 @@ pub fn get_random_user_agent() -> &'static str {
     ];
 
     AGENTS.choose(&mut rand::rng()).unwrap_or(&AGENTS[0])
+}
+pub fn parse_year(y: &str) -> (String, Option<String>) {
+    let mut parts = y.splitn(2, '-');
+    let year_raw = parts.next().unwrap_or("").trim();
+    let fuel_id = parts.next().map(|s| s.to_string());
+    let year_str = if year_raw == "32000" {
+        Utc::now().year().to_string()
+    } else {
+        year_raw.to_string()
+    };
+    let year_date = format!("{}-01-01", year_str);
+
+    (year_date, fuel_id)
 }
