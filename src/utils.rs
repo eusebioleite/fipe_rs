@@ -56,7 +56,7 @@ pub fn progress_bar(len: u64) -> ProgressBar {
             "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})"
         )
             .unwrap()
-            .progress_chars("#>-")
+            .progress_chars("=> ")
     );
     pb
 }

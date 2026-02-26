@@ -13,7 +13,7 @@ pub fn check_db(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
         "{msg}{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
     )
     .unwrap()
-    .progress_chars("#>-");
+    .progress_chars("=> ");
     let counts = match select_rowcount(conn) {
         Ok(counts) => counts,
         Err(err) => {
