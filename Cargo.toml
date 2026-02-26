@@ -3,6 +3,25 @@ name = "fipe_rs"
 version = "1.1.0"
 edition = "2024"
 
+[profile.release]
+# Otimização de nível 3 (máxima)
+opt-level = 3
+
+# Link Time Optimization (LTO) "fat" analisa todas as crates como um único bloco
+# Isso permite inlining agressivo entre dependências
+lto = "fat"
+
+# Reduz o paralelismo na geração de código para 1 unidade. 
+# Isso permite que o LLVM otimize o binário inteiro de forma global e coesa
+codegen-units = 1
+
+# Remove símbolos de debug para diminuir o tamanho do binário
+strip = true
+
+# Aborta no panic em vez de fazer unwind. 
+# Reduz o overhead de código de tratamento de erro na stack
+panic = "abort"
+
 [dependencies]
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
 reqwest = { version = "0.13.1", features = ["json"] }
